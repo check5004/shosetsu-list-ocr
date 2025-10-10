@@ -40,22 +40,22 @@
   - 単体テストを作成（ウィンドウ検索、キャプチャ）
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 4. YOLOv8 物体検出モジュールの実装
-- [ ] 4.1 ObjectDetector クラスの基本構造を作成
+- [x] 4. YOLOv8 物体検出モジュールの実装
+- [x] 4.1 ObjectDetector クラスの基本構造を作成
 
   - `src/object_detector.py`を作成
   - DetectionResult データクラスを定義
   - ObjectDetector クラスを定義し、初期化メソッドを実装
   - _Requirements: 2.1, 2.6_
 
-- [ ] 4.2 YOLOv8 モデルのロードと推論機能を実装
+- [x] 4.2 YOLOv8 モデルのロードと推論機能を実装
 
   - モデルファイルの存在チェック
   - YOLOv8 モデルのロード（Apple Silicon MPS 対応）
   - `detect()`メソッドを実装（信頼度フィルタリング含む）
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 9.1_
 
-- [ ] 4.3 検出結果のソート機能を実装
+- [x] 4.3 検出結果のソート機能を実装
 
   - `sort_by_y_coordinate()`静的メソッドを実装
   - Y 座標（上から下）でソート
