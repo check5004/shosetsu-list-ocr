@@ -158,8 +158,6 @@ python src/realtime_ocr_app.py
 │   ├── gui_app.py          # GUIアプリケーション（推奨）
 │   ├── realtime_ocr_app.py # CLIアプリケーション
 │   ├── window_capture.py   # ウィンドウキャプチャモジュール
-│   ├── region_capture.py   # 領域キャプチャモジュール（GUI用）
-│   ├── region_selector.py  # 領域選択モジュール（GUI用）
 │   ├── object_detector.py  # YOLOv8物体検出モジュール
 │   ├── ocr_processor.py    # OCRモジュール
 │   ├── data_manager.py     # データ管理モジュール
@@ -243,15 +241,6 @@ macOSの場合、Pythonに標準でtkinterが含まれていますが、Homebrew
 ```bash
 brew install python-tk@3.9  # または使用しているPythonバージョン
 ```
-
-### 領域選択が機能しない
-
-**問題**: GUI起動後に「領域を選択」ボタンをクリックしても反応しない
-
-**解決策**:
-1. macOSの画面収録権限が付与されているか確認
-2. 選択したい画面/ウィンドウが表示されているか確認
-3. 選択後、Enterキーを押して確定、Escキーでキャンセル
 
 ### データが重複して保存される
 

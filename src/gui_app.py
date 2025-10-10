@@ -14,8 +14,6 @@ from PIL import Image, ImageTk
 
 from config import AppConfig
 from window_capture import WindowCapture
-from region_capture import RegionCapture
-from region_selector import select_screen_region
 from object_detector import ObjectDetector
 from ocr_processor import OCRProcessor
 from data_manager import DataManager
@@ -39,9 +37,6 @@ class RealtimeOCRGUI:
         
         # Processing components
         self.window_capture: Optional[WindowCapture] = None
-        self.region_capture: Optional[RegionCapture] = None
-        self.selected_region: Optional[Tuple[int, int, int, int]] = None
-        self.use_region_capture: bool = False
         self.object_detector: Optional[ObjectDetector] = None
         self.ocr_processor: Optional[OCRProcessor] = None
         self.data_manager: Optional[DataManager] = None
@@ -124,68 +119,19 @@ class RealtimeOCRGUI:
         if self.window_title_var.get() not in self.available_windows and self.available_windows:
             self.window_title_var.set(self.available_windows[0])
     
-    def _on_mode_change(self):
-        """Handle capture mode change."""
-        mode = self.capture_mode_var.get()
-        
-        if mode == "window":
-            # Enable window controls, disable region controls
-            self.window_combo.config(state='normal')
-            self.region_label.config(text="未選択")
-            self.use_region_capture = False
-        else:
-            # Disable window controls, enable region controls
-            self.window_combo.config(state='disabled')
-            self.use_region_capture = True
-    
-    def _select_region(self):
-        """Open region selector to choose screen area."""
-        try:
-            # Hide main window
-            self.root.withdraw()
-            
-            # Wait a bit for window to hide
-            self.root.update()
-            import time
-            time.sleep(0.3)
-            
-            # Select region
-            region = select_screen_region()
-            
-            if region:
-                self.selected_region = region
-                x, y, w, h = region
-                self.region_label.config(text=f"{w}x{h} @ ({x}, {y})")
-            
-            # Restore main window
-            self.root.deiconify()
-            self.root.lift()
-        except Exception as e:
-            self.root.deiconify()
-            messagebox.showerror("エラー", f"領域選択に失敗しました:\n{str(e)}")
-    
     def _setup_left_panel(self, parent):
         """Setup left panel with config, controls, and stats."""
         # Config section
         config_group = ttk.LabelFrame(parent, text="設定", padding="10")
         config_group.pack(fill=tk.X, pady=(0, 10))
         
-        # Capture mode selection
-        ttk.Label(config_group, text="キャプチャモード:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        mode_frame = ttk.Frame(config_group)
-        mode_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
-        
-        self.capture_mode_var = tk.StringVar(value="window")
-        ttk.Radiobutton(mode_frame, text="ウィンドウ", variable=self.capture_mode_var, value="window", command=self._on_mode_change).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Radiobutton(mode_frame, text="画面領域", variable=self.capture_mode_var, value="region", command=self._on_mode_change).pack(side=tk.LEFT)
-        
-        # Window title (for window mode)
-        ttk.Label(config_group, text="ウィンドウタイトル:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        # Window title
+        ttk.Label(config_group, text="ウィンドウタイトル:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.window_title_var = tk.StringVar(value=self.config.target_window_title)
         
         # Create frame for combobox and refresh button
         window_frame = ttk.Frame(config_group)
-        window_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        window_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
         window_frame.columnconfigure(0, weight=1)
         
         # Get available windows
@@ -203,28 +149,15 @@ class RealtimeOCRGUI:
         # Refresh button
         ttk.Button(window_frame, text="🔄", command=self._refresh_windows, width=3).grid(row=0, column=1, padx=(5, 0))
         
-        # Region selection (for region mode)
-        ttk.Label(config_group, text="画面領域:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        region_frame = ttk.Frame(config_group)
-        region_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
-        
-        self.region_label = ttk.Label(region_frame, text="未選択")
-        self.region_label.pack(side=tk.LEFT)
-        
-        ttk.Button(region_frame, text="領域を選択", command=self._select_region).pack(side=tk.LEFT, padx=(10, 0))
-        
-        # Initially disable region controls
-        self._on_mode_change()
-        
         # Confidence
-        ttk.Label(config_group, text="信頼度:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_group, text="信頼度:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.confidence_var = tk.DoubleVar(value=self.config.confidence_threshold)
-        ttk.Scale(config_group, from_=0.0, to=1.0, variable=self.confidence_var, orient=tk.HORIZONTAL).grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(config_group, from_=0.0, to=1.0, variable=self.confidence_var, orient=tk.HORIZONTAL).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
         
         # OCR language
-        ttk.Label(config_group, text="OCR言語:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_group, text="OCR言語:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.ocr_lang_var = tk.StringVar(value=self.config.ocr_lang)
-        ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], state='readonly', width=27).grid(row=4, column=1, pady=5, padx=5)
+        ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], state='readonly', width=27).grid(row=2, column=1, pady=5, padx=5)
         
         config_group.columnconfigure(1, weight=1)
         
@@ -336,17 +269,12 @@ class RealtimeOCRGUI:
             self.object_detector = ObjectDetector(model_path=self.config.model_path, confidence_threshold=self.config.confidence_threshold)
             self.ocr_processor = OCRProcessor(lang=self.config.ocr_lang, margin=self.config.ocr_margin)
             
-            # Initialize capture based on mode
-            if self.use_region_capture:
-                if not self.selected_region:
-                    raise RuntimeError("画面領域が選択されていません。「領域を選択」ボタンをクリックしてください。")
-                self.region_capture = RegionCapture(self.selected_region)
-            else:
-                self.config.target_window_title = self.window_title_var.get()
-                self.window_capture = WindowCapture(window_title=self.config.target_window_title)
-                
-                if self.window_capture.find_window() is None:
-                    raise RuntimeError(f"ウィンドウが見つかりません: {self.config.target_window_title}")
+            # Initialize window capture
+            self.config.target_window_title = self.window_title_var.get()
+            self.window_capture = WindowCapture(window_title=self.config.target_window_title)
+            
+            if self.window_capture.find_window() is None:
+                raise RuntimeError(f"ウィンドウが見つかりません: {self.config.target_window_title}")
         except Exception as e:
             messagebox.showerror("初期化エラー", str(e))
             return
@@ -392,11 +320,8 @@ class RealtimeOCRGUI:
                     self.stop_event.wait(0.1)
                     continue
                 
-                # Capture frame based on mode
-                if self.use_region_capture:
-                    frame = self.region_capture.capture_frame()
-                else:
-                    frame = self.window_capture.capture_frame()
+                # Capture frame
+                frame = self.window_capture.capture_frame()
                 
                 if frame is None:
                     continue
