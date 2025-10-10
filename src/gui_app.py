@@ -33,7 +33,10 @@ class RealtimeOCRGUI:
         self.config = AppConfig()
         self.is_running = False
         self.is_paused = False
+        self.preview_active = False  # プレビュー表示中
+        self.processing_active = False  # 物体検知・OCR処理中
         self.processing_thread: Optional[threading.Thread] = None
+        self.preview_thread: Optional[threading.Thread] = None
         
         # Processing components
         self.window_capture: Optional[WindowCapture] = None
@@ -48,13 +51,19 @@ class RealtimeOCRGUI:
             'new_detections': 0,
             'duplicate_detections': 0,
             'frames_processed': 0,
-            'start_time': None
+            'start_time': None,
+            'fps': 0.0,
+            'last_fps_update': None,
+            'frame_count_for_fps': 0
         }
         
         # Thread communication
         self.frame_queue = queue.Queue(maxsize=2)
         self.log_queue = queue.Queue()
         self.stop_event = threading.Event()
+        self.preview_stop_event = threading.Event()
+        self.processing_stop_event = threading.Event()
+        self.state_lock = threading.Lock()
         
         # Setup GUI
         self._setup_ui()
@@ -165,10 +174,18 @@ class RealtimeOCRGUI:
         control_group = ttk.LabelFrame(parent, text="制御", padding="10")
         control_group.pack(fill=tk.X, pady=(0, 10))
         
+        # Window selection button
+        window_btn_frame = ttk.Frame(control_group)
+        window_btn_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        self.select_window_btn = ttk.Button(window_btn_frame, text="ウィンドウを選択してプレビュー", command=self._select_window_and_preview)
+        self.select_window_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Processing control buttons
         btn_frame = ttk.Frame(control_group)
         btn_frame.pack(fill=tk.X)
         
-        self.start_stop_btn = ttk.Button(btn_frame, text="開始", command=self._toggle_start_stop)
+        self.start_stop_btn = ttk.Button(btn_frame, text="開始", command=self._toggle_start_stop, state=tk.DISABLED)
         self.start_stop_btn.pack(side=tk.LEFT, padx=5)
         
         self.pause_resume_btn = ttk.Button(btn_frame, text="一時停止", command=self._toggle_pause_resume, state=tk.DISABLED)
@@ -181,7 +198,8 @@ class RealtimeOCRGUI:
         status_frame.pack(fill=tk.X, pady=(10, 0))
         ttk.Label(status_frame, text="ステータス:").pack(side=tk.LEFT)
         self.status_var = tk.StringVar(value="停止中")
-        ttk.Label(status_frame, textvariable=self.status_var, font=('TkDefaultFont', 10, 'bold')).pack(side=tk.LEFT, padx=5)
+        self.status_label = ttk.Label(status_frame, textvariable=self.status_var, font=('TkDefaultFont', 10, 'bold'))
+        self.status_label.pack(side=tk.LEFT, padx=5)
         
         # Stats section
         stats_group = ttk.LabelFrame(parent, text="統計情報", padding="10")
@@ -199,6 +217,10 @@ class RealtimeOCRGUI:
         
         ttk.Label(stats_group, text="新規検出:").grid(row=2, column=0, sticky=tk.W, pady=2)
         ttk.Label(stats_group, textvariable=self.new_detections_var, foreground='green').grid(row=2, column=1, sticky=tk.W, pady=2)
+        
+        self.fps_var = tk.StringVar(value="0.0")
+        ttk.Label(stats_group, text="FPS:").grid(row=3, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.fps_var, foreground='blue').grid(row=3, column=1, sticky=tk.W, pady=2)
         
         self._update_stats()
     
@@ -241,26 +263,155 @@ class RealtimeOCRGUI:
         self.log_text.tag_config('error', foreground='red')
         self.log_text.tag_config('info', foreground='blue')
     
+    def _select_window_and_preview(self):
+        """Select window and start preview."""
+        current_state = self._get_current_state()
+        
+        if current_state in ["preview", "processing", "paused"]:
+            # Stop everything
+            if current_state in ["processing", "paused"]:
+                self._stop_processing()
+            self._stop_preview()
+            self._set_state("stopped")
+        else:
+            # Start preview
+            try:
+                self.config.target_window_title = self.window_title_var.get()
+                self.window_capture = WindowCapture(window_title=self.config.target_window_title)
+                
+                if self.window_capture.find_window() is None:
+                    raise RuntimeError(f"ウィンドウが見つかりません: {self.config.target_window_title}")
+                
+                self._start_preview()
+                self._set_state("preview")
+            except Exception as e:
+                messagebox.showerror("エラー", str(e))
+                self._set_state("stopped")
+    
     def _toggle_start_stop(self):
         """Toggle start/stop."""
-        if not self.is_running:
+        current_state = self._get_current_state()
+        
+        if current_state in ["preview"]:
             self._start_processing()
-        else:
+        elif current_state in ["processing", "paused"]:
             self._stop_processing()
+    
+    def _update_status_color(self, color: str):
+        """Update status label color."""
+        self.status_label.config(foreground=color)
+    
+    def _get_current_state(self) -> str:
+        """Get current application state."""
+        with self.state_lock:
+            if self.processing_active:
+                if self.is_paused:
+                    return "paused"
+                return "processing"
+            elif self.preview_active:
+                return "preview"
+            else:
+                return "stopped"
+    
+    def _set_state(self, state: str):
+        """Set application state with proper UI updates."""
+        with self.state_lock:
+            if state == "stopped":
+                self.preview_active = False
+                self.processing_active = False
+                self.is_paused = False
+                self.status_var.set("停止中")
+                self._update_status_color("black")
+                self.select_window_btn.config(text="ウィンドウを選択してプレビュー")
+                self.start_stop_btn.config(state=tk.DISABLED)
+                self.pause_resume_btn.config(state=tk.DISABLED)
+            elif state == "preview":
+                self.preview_active = True
+                self.processing_active = False
+                self.is_paused = False
+                self.status_var.set("プレビュー中")
+                self._update_status_color("blue")
+                self.select_window_btn.config(text="プレビューを停止")
+                self.start_stop_btn.config(state=tk.NORMAL, text="開始")
+                self.pause_resume_btn.config(state=tk.DISABLED)
+            elif state == "processing":
+                self.preview_active = True
+                self.processing_active = True
+                self.is_paused = False
+                self.status_var.set("処理中")
+                self._update_status_color("green")
+                self.start_stop_btn.config(text="停止")
+                self.pause_resume_btn.config(state=tk.NORMAL, text="一時停止")
+            elif state == "paused":
+                self.preview_active = True
+                self.processing_active = True
+                self.is_paused = True
+                self.status_var.set("一時停止中")
+                self._update_status_color("orange")
+                self.pause_resume_btn.config(text="再開")
     
     def _toggle_pause_resume(self):
         """Toggle pause/resume."""
-        if not self.is_paused:
-            self.is_paused = True
-            self.pause_resume_btn.config(text="再開")
-            self.status_var.set("一時停止中")
-        else:
-            self.is_paused = False
-            self.pause_resume_btn.config(text="一時停止")
-            self.status_var.set("実行中")
+        current_state = self._get_current_state()
+        
+        if current_state == "processing":
+            self._set_state("paused")
+        elif current_state == "paused":
+            self._set_state("processing")
+    
+    def _start_preview(self):
+        """Start preview loop (capture only)."""
+        self.preview_stop_event.clear()
+        self.preview_thread = threading.Thread(target=self._preview_loop, daemon=True)
+        self.preview_thread.start()
+    
+    def _stop_preview(self):
+        """Stop preview loop."""
+        self.preview_stop_event.set()
+        if self.preview_thread:
+            self.preview_thread.join(timeout=2.0)
+        
+        # Clear preview
+        self.preview_canvas.delete("all")
+        self.current_photo = None
+    
+    def _preview_loop(self):
+        """Preview loop - capture and display only."""
+        try:
+            while not self.preview_stop_event.is_set():
+                if self.window_capture is None:
+                    break
+                
+                # Skip preview if processing is active (processing loop handles display)
+                current_state = self._get_current_state()
+                if current_state in ["processing", "paused"]:
+                    self.preview_stop_event.wait(0.1)
+                    continue
+                
+                # Capture frame
+                frame = self.window_capture.capture_frame()
+                
+                if frame is None:
+                    continue
+                
+                # Send frame to display
+                try:
+                    self.frame_queue.put_nowait(frame)
+                except queue.Full:
+                    pass
+                
+                # Small delay to control frame rate
+                self.preview_stop_event.wait(0.033)  # ~30 FPS
+        except Exception as e:
+            self.log_queue.put((f"プレビューエラー: {str(e)}", 'error'))
     
     def _start_processing(self):
-        """Start processing."""
+        """Start processing (detection + OCR)."""
+        current_state = self._get_current_state()
+        if current_state not in ["preview"]:
+            messagebox.showwarning("警告", "先にウィンドウを選択してプレビューを開始してください")
+            return
+        
         self.config.confidence_threshold = self.confidence_var.get()
         self.config.ocr_lang = self.ocr_lang_var.get()
         
@@ -268,40 +419,30 @@ class RealtimeOCRGUI:
             self.data_manager = DataManager(output_path=self.config.output_csv)
             self.object_detector = ObjectDetector(model_path=self.config.model_path, confidence_threshold=self.config.confidence_threshold)
             self.ocr_processor = OCRProcessor(lang=self.config.ocr_lang, margin=self.config.ocr_margin)
-            
-            # Initialize window capture
-            self.config.target_window_title = self.window_title_var.get()
-            self.window_capture = WindowCapture(window_title=self.config.target_window_title)
-            
-            if self.window_capture.find_window() is None:
-                raise RuntimeError(f"ウィンドウが見つかりません: {self.config.target_window_title}")
         except Exception as e:
             messagebox.showerror("初期化エラー", str(e))
             return
         
-        self.is_running = True
-        self.start_stop_btn.config(text="停止")
-        self.pause_resume_btn.config(state=tk.NORMAL)
-        self.status_var.set("実行中")
-        
         self.stats['start_time'] = datetime.now()
         self.stats['frames_processed'] = 0
         self.stats['new_detections'] = 0
+        self.stats['fps'] = 0.0
+        self.stats['last_fps_update'] = None
+        self.stats['frame_count_for_fps'] = 0
         
-        self.stop_event.clear()
+        self.processing_stop_event.clear()
         self.processing_thread = threading.Thread(target=self._processing_loop, daemon=True)
         self.processing_thread.start()
+        
+        self._set_state("processing")
     
     def _stop_processing(self):
-        """Stop processing."""
-        self.stop_event.set()
+        """Stop processing (but keep preview running)."""
+        self.processing_stop_event.set()
         if self.processing_thread:
             self.processing_thread.join(timeout=2.0)
         
-        self.is_running = False
-        self.start_stop_btn.config(text="開始")
-        self.pause_resume_btn.config(state=tk.DISABLED)
-        self.status_var.set("停止中")
+        self._set_state("preview")
     
     def _export_csv(self):
         """Export to CSV."""
@@ -313,22 +454,42 @@ class RealtimeOCRGUI:
                 messagebox.showerror("エラー", str(e))
     
     def _processing_loop(self):
-        """Main processing loop."""
+        """Processing loop - detection and OCR only."""
         try:
-            while not self.stop_event.is_set():
+            frame_start_time = datetime.now()
+            
+            while not self.processing_stop_event.is_set():
                 if self.is_paused:
-                    self.stop_event.wait(0.1)
+                    self.processing_stop_event.wait(0.1)
                     continue
                 
                 # Capture frame
+                if self.window_capture is None:
+                    break
+                
                 frame = self.window_capture.capture_frame()
                 
                 if frame is None:
                     continue
                 
+                # Calculate FPS
+                current_time = datetime.now()
+                self.stats['frame_count_for_fps'] += 1
+                
+                if self.stats['last_fps_update'] is None:
+                    self.stats['last_fps_update'] = current_time
+                
+                time_diff = (current_time - self.stats['last_fps_update']).total_seconds()
+                if time_diff >= 1.0:  # Update FPS every second
+                    self.stats['fps'] = self.stats['frame_count_for_fps'] / time_diff
+                    self.stats['frame_count_for_fps'] = 0
+                    self.stats['last_fps_update'] = current_time
+                
+                # Detect objects
                 detections = self.object_detector.detect(frame)
                 self.stats['frames_processed'] += 1
                 
+                # Process OCR for each detection
                 for detection in detections:
                     text = self.ocr_processor.extract_text(frame, detection)
                     if text:
@@ -337,7 +498,7 @@ class RealtimeOCRGUI:
                         if is_new:
                             self.stats['new_detections'] += 1
                 
-                # Draw and send frame
+                # Draw detections on frame
                 frame_copy = frame.copy()
                 for detection in detections:
                     try:
@@ -351,12 +512,21 @@ class RealtimeOCRGUI:
                     except Exception:
                         pass  # Skip drawing if error
                 
+                # Send frame to display (override preview frame)
                 try:
+                    # Clear queue and put new frame
+                    while not self.frame_queue.empty():
+                        try:
+                            self.frame_queue.get_nowait()
+                        except queue.Empty:
+                            break
                     self.frame_queue.put_nowait(frame_copy)
                 except queue.Full:
                     pass
+                
+                # No delay - run as fast as possible to maximize FPS
         except Exception as e:
-            self.log_queue.put((f"エラー: {str(e)}", 'error'))
+            self.log_queue.put((f"処理エラー: {str(e)}", 'error'))
     
     def _process_queues(self):
         """Process queues."""
@@ -415,6 +585,7 @@ class RealtimeOCRGUI:
             self.unique_count_var.set(str(self.data_manager.get_count()))
         self.frames_var.set(str(self.stats['frames_processed']))
         self.new_detections_var.set(str(self.stats['new_detections']))
+        self.fps_var.set(f"{self.stats['fps']:.1f}")
         
         self.root.after(1000, self._update_stats)
     

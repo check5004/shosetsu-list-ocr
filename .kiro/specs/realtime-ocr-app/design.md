@@ -47,9 +47,11 @@
 ### Data Flow
 
 ```
-[Target Window]
+[Target Window Selection]
       ↓
-[Screen Capture] → [Frame Buffer]
+[Screen Capture] → [Frame Buffer] → [Preview Display (Always)]
+      ↓
+[User clicks Start Button]
       ↓
 [YOLOv8 Detection] → [Bounding Boxes]
       ↓
@@ -63,8 +65,13 @@
       ↓
 [Unique Text Set] → [CSV Export on Exit]
       ↓
-[Display with Overlays]
+[Display with Overlays (Detection + OCR active)]
 ```
+
+**Processing States:**
+1. **Preview Mode**: ウィンドウ選択後、キャプチャのみ実行してプレビュー表示
+2. **Active Mode**: 開始ボタン押下後、物体検知とOCR処理を実行
+3. **Paused Mode**: 停止ボタン押下後、プレビュー表示のみ継続
 
 ## Components and Interfaces
 
