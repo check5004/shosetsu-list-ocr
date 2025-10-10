@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. プロジェクト構造とセットアップ
+- [x] 1. プロジェクト構造とセットアップ
   - プロジェクトディレクトリ構造を作成（src/, config/, models/, output/）
   - requirements.txtファイルを作成し、必要な依存関係を定義
   - README.mdを作成し、インストール手順とmacOS権限設定を記載

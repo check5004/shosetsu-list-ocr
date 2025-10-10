@@ -1,0 +1,9 @@
+# Core Dependencies
+ultralytics>=8.0.0      # YOLOv8 for object detection
+opencv-python>=4.8.0    # Image processing and display
+pytesseract>=0.3.10     # OCR engine wrapper
+pandas>=2.0.0           # CSV data handling
+mss>=9.0.0              # Cross-platform screen capture
+pyobjc-framework-Quartz>=9.0  # macOS window management
+numpy>=1.24.0           # Numerical computing
+torch>=2.0.0            # PyTorch for YOLOv8 (with MPS support for Apple Silicon)
