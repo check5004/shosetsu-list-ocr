@@ -28,7 +28,7 @@ class AppConfig:
     """
     
     # Model settings
-    model_path: str = "runs/detect/train/weights/best.pt"
+    model_path: str = "models/best.pt"
     confidence_threshold: float = 0.6
     
     # Window capture settings

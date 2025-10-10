@@ -10,6 +10,7 @@ Requirements: 7.1, 7.2
 """
 
 import sys
+import argparse
 from pathlib import Path
 
 # プロジェクトルートをPythonパスに追加
@@ -25,7 +26,7 @@ from src.visualizer import Visualizer
 from src.error_handler import ErrorHandler
 
 
-def main():
+def main_cli():
     """
     メインアプリケーション関数
     
@@ -188,6 +189,97 @@ def main():
             data_manager=data_manager,
             cleanup_callback=visualizer.cleanup
         )
+
+
+def main():
+    """
+    メインエントリーポイント
+    
+    コマンドライン引数を解析し、GUIモードまたはCLIモードで起動します。
+    
+    Requirements: 7.1
+    """
+    parser = argparse.ArgumentParser(
+        description="リアルタイムOCRアプリケーション - iPhoneアプリの画面から読書記録データを抽出"
+    )
+    parser.add_argument(
+        '--gui',
+        action='store_true',
+        help='GUIモードで起動（デフォルトはCLIモード）'
+    )
+    parser.add_argument(
+        '--window-title',
+        type=str,
+        help='キャプチャするウィンドウのタイトル（部分一致）'
+    )
+    parser.add_argument(
+        '--model-path',
+        type=str,
+        help='YOLOv8モデルファイルのパス'
+    )
+    parser.add_argument(
+        '--confidence',
+        type=float,
+        help='検出の信頼度しきい値（0.0-1.0）'
+    )
+    parser.add_argument(
+        '--output',
+        type=str,
+        help='出力CSVファイルのパス'
+    )
+    
+    args = parser.parse_args()
+    
+    if args.gui:
+        # GUIモードで起動
+        try:
+            import tkinter as tk
+            from src.gui_app import RealtimeOCRGUI
+            
+            root = tk.Tk()
+            app = RealtimeOCRGUI(root)
+            
+            # コマンドライン引数から設定を上書き
+            if args.window_title:
+                app.window_title_var.set(args.window_title)
+            if args.model_path:
+                app.model_path_var.set(args.model_path)
+            if args.confidence:
+                app.confidence_var.set(args.confidence)
+            if args.output:
+                app.output_csv_var.set(args.output)
+            
+            app.run()
+        
+        except ImportError as e:
+            print(f"エラー: GUIモードの起動に失敗しました")
+            print(f"詳細: {e}")
+            print("Tkinterがインストールされていることを確認してください")
+            sys.exit(1)
+        except Exception as e:
+            print(f"エラー: GUIの実行中にエラーが発生しました")
+            print(f"詳細: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    else:
+        # CLIモードで起動
+        print("CLIモードで起動します...")
+        
+        # コマンドライン引数から設定を上書き
+        if any([args.window_title, args.model_path, args.confidence, args.output]):
+            import os
+            if args.window_title:
+                os.environ['OCR_WINDOW_TITLE'] = args.window_title
+            if args.model_path:
+                os.environ['OCR_MODEL_PATH'] = args.model_path
+            if args.confidence:
+                os.environ['OCR_CONFIDENCE_THRESHOLD'] = str(args.confidence)
+            if args.output:
+                os.environ['OCR_OUTPUT_CSV'] = args.output
+        
+        main_cli()
 
 
 if __name__ == "__main__":
