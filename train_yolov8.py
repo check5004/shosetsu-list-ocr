@@ -49,8 +49,8 @@ def main():
     # トレーニング設定
     print("⚙️  トレーニング設定:")
     epochs = 100
-    imgsz = 640
-    batch = 8
+    imgsz = 1280  # 元画像のアスペクト比を考慮して大きめに
+    batch = 4  # 画像サイズが大きいのでバッチサイズを減らす
     patience = 20  # Early stopping
     
     print(f"   - エポック数: {epochs}")

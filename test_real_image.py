@@ -37,9 +37,9 @@ def main():
         detector = None
     else:
         print("🔍 YOLOv8モデルを読み込み中...")
-        detector = ObjectDetector(str(model_path), confidence_threshold=0.3)  # しきい値を下げて検出しやすく
+        detector = ObjectDetector(str(model_path), confidence_threshold=0.1)  # しきい値を大幅に下げて実験
         print(f"✅ モデル読み込み完了（デバイス: {detector.device}）")
-        print(f"   信頼度しきい値: 0.3")
+        print(f"   信頼度しきい値: 0.1")
         print()
     
     # OCRプロセッサの初期化
@@ -57,8 +57,25 @@ def main():
     # 物体検出を実行
     if detector:
         print("🎯 物体検出を実行中...")
+        
+        # デバッグ: しきい値なしで全検出結果を取得
+        print("   デバッグ: しきい値なしで検出を実行...")
+        from ultralytics import YOLO
+        model = YOLO(str(model_path))
+        results = model(frame, verbose=False)
+        
+        if results and len(results) > 0:
+            boxes = results[0].boxes
+            print(f"   生の検出数: {len(boxes)}")
+            if len(boxes) > 0:
+                print(f"   信頼度の範囲: {boxes.conf.min():.3f} - {boxes.conf.max():.3f}")
+                print(f"   各検出の信頼度:")
+                for i, conf in enumerate(boxes.conf):
+                    print(f"      検出 {i+1}: {conf:.3f}")
+        print()
+        
         detections = detector.detect(frame)
-        print(f"✅ {len(detections)}個のリストアイテムを検出")
+        print(f"✅ しきい値 0.1 以上: {len(detections)}個のリストアイテムを検出")
         print()
         
         if detections:

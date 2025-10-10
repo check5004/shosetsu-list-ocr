@@ -5,8 +5,8 @@ data: temp/shosetsu-list-item_dataset/data.yaml
 epochs: 100
 time: null
 patience: 20
-batch: 8
-imgsz: 640
+batch: 4
+imgsz: 1280
 save: true
 save_period: -1
 cache: false
