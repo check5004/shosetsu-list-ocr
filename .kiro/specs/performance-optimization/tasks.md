@@ -7,15 +7,15 @@
   - パフォーマンスレポート生成機能を実装
   - _Requirements: 1.1, 1.2, 5.1, 5.2_
 
-- [ ] 2. キャッシング機構の実装
-- [ ] 2.1 DetectionCacheクラスの実装
+- [x] 2. キャッシング機構の実装
+- [x] 2.1 DetectionCacheクラスの実装
   - `src/detection_cache.py`を作成
   - フレームハッシュ計算機能を実装
   - キャッシュエントリの管理（TTL、類似度判定）を実装
   - should_skip_detection/get_cached_detections/update_cacheメソッドを実装
   - _Requirements: 2.2, 4.1_
 
-- [ ] 2.2 OCRCacheクラスの実装
+- [x] 2.2 OCRCacheクラスの実装
   - `src/ocr_cache.py`を作成
   - バウンディングボックスの近似一致判定機能を実装
   - キャッシュキー生成とキャッシュ管理を実装
