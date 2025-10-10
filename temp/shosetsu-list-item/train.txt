@@ -1,0 +1,6 @@
+data/obj_train_data/IMG_1307.png
+data/obj_train_data/IMG_1308.png
+data/obj_train_data/IMG_1309.png
+data/obj_train_data/IMG_1310.png
+data/obj_train_data/IMG_1311.png
+data/obj_train_data/IMG_1312.png
