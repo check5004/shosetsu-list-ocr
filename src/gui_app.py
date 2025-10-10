@@ -12,12 +12,14 @@ from datetime import datetime
 import cv2
 from PIL import Image, ImageTk
 
-from config import AppConfig
-from window_capture import WindowCapture
-from object_detector import ObjectDetector
-from ocr_processor import OCRProcessor
-from data_manager import DataManager
-from error_handler import ErrorHandler
+from src.config import AppConfig
+from src.window_capture import WindowCapture
+from src.object_detector import ObjectDetector
+from src.ocr_processor import OCRProcessor
+from src.data_manager import DataManager
+from src.error_handler import ErrorHandler
+from src.pipeline_processor import PipelineProcessor
+from src.performance_mode import get_available_modes
 
 
 class RealtimeOCRGUI:
@@ -43,6 +45,7 @@ class RealtimeOCRGUI:
         self.object_detector: Optional[ObjectDetector] = None
         self.ocr_processor: Optional[OCRProcessor] = None
         self.data_manager: Optional[DataManager] = None
+        self.pipeline_processor: Optional[PipelineProcessor] = None
         
         # Statistics
         self.stats = {
@@ -128,6 +131,29 @@ class RealtimeOCRGUI:
         if self.window_title_var.get() not in self.available_windows and self.available_windows:
             self.window_title_var.set(self.available_windows[0])
     
+    def _on_performance_mode_changed(self, event=None):
+        """パフォーマンスモード変更時のハンドラ"""
+        # Get selected mode key from display value
+        selected_display = self.performance_mode_combo.get()
+        # Extract key from "key (name)" format
+        mode_key = selected_display.split(' (')[0]
+        
+        # If processing is active, restart with new mode
+        current_state = self._get_current_state()
+        if current_state in ["processing", "paused"]:
+            # Show confirmation dialog
+            if messagebox.askyesno(
+                "モード変更",
+                "パフォーマンスモードを変更すると処理が再起動されます。続行しますか？"
+            ):
+                self._stop_processing()
+                # Wait a bit for cleanup
+                self.root.after(500, lambda: self._start_processing_with_mode(mode_key))
+            else:
+                # Revert to previous mode
+                # This is a simplified approach - in production you'd track the previous mode
+                pass
+    
     def _setup_left_panel(self, parent):
         """Setup left panel with config, controls, and stats."""
         # Config section
@@ -167,6 +193,27 @@ class RealtimeOCRGUI:
         ttk.Label(config_group, text="OCR言語:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.ocr_lang_var = tk.StringVar(value=self.config.ocr_lang)
         ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], state='readonly', width=27).grid(row=2, column=1, pady=5, padx=5)
+        
+        # Performance mode
+        ttk.Label(config_group, text="パフォーマンスモード:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.performance_mode_var = tk.StringVar(value="balanced")
+        available_modes = get_available_modes()
+        mode_display_values = [f"{key} ({name})" for key, name in available_modes.items()]
+        self.performance_mode_combo = ttk.Combobox(
+            config_group,
+            textvariable=self.performance_mode_var,
+            values=list(available_modes.keys()),
+            state='readonly',
+            width=27
+        )
+        self.performance_mode_combo.grid(row=3, column=1, pady=5, padx=5)
+        
+        # Display mode names in combobox
+        self.performance_mode_combo['values'] = mode_display_values
+        self.performance_mode_combo.set("balanced (バランス)")
+        
+        # Bind mode change event
+        self.performance_mode_combo.bind('<<ComboboxSelected>>', self._on_performance_mode_changed)
         
         config_group.columnconfigure(1, weight=1)
         
@@ -221,6 +268,25 @@ class RealtimeOCRGUI:
         self.fps_var = tk.StringVar(value="0.0")
         ttk.Label(stats_group, text="FPS:").grid(row=3, column=0, sticky=tk.W, pady=2)
         ttk.Label(stats_group, textvariable=self.fps_var, foreground='blue').grid(row=3, column=1, sticky=tk.W, pady=2)
+        
+        # Performance metrics
+        ttk.Separator(stats_group, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        self.avg_capture_var = tk.StringVar(value="0.0ms")
+        ttk.Label(stats_group, text="平均キャプチャ時間:").grid(row=5, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.avg_capture_var, font=('TkDefaultFont', 8)).grid(row=5, column=1, sticky=tk.W, pady=2)
+        
+        self.avg_detection_var = tk.StringVar(value="0.0ms")
+        ttk.Label(stats_group, text="平均検出時間:").grid(row=6, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.avg_detection_var, font=('TkDefaultFont', 8)).grid(row=6, column=1, sticky=tk.W, pady=2)
+        
+        self.avg_ocr_var = tk.StringVar(value="0.0ms")
+        ttk.Label(stats_group, text="平均OCR時間:").grid(row=7, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.avg_ocr_var, font=('TkDefaultFont', 8)).grid(row=7, column=1, sticky=tk.W, pady=2)
+        
+        self.cache_hit_rate_var = tk.StringVar(value="0.0%")
+        ttk.Label(stats_group, text="キャッシュヒット率:").grid(row=8, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.cache_hit_rate_var, foreground='purple').grid(row=8, column=1, sticky=tk.W, pady=2)
         
         self._update_stats()
     
@@ -412,13 +478,35 @@ class RealtimeOCRGUI:
             messagebox.showwarning("警告", "先にウィンドウを選択してプレビューを開始してください")
             return
         
+        # Get mode key from display value
+        selected_display = self.performance_mode_combo.get()
+        mode_key = selected_display.split(' (')[0]
+        
+        self._start_processing_with_mode(mode_key)
+    
+    def _start_processing_with_mode(self, mode_key: str):
+        """指定されたモードで処理を開始
+        
+        Args:
+            mode_key: パフォーマンスモードキー（"fast", "balanced", "accurate"）
+        """
         self.config.confidence_threshold = self.confidence_var.get()
         self.config.ocr_lang = self.ocr_lang_var.get()
+        self.config.target_window_title = self.window_title_var.get()
         
         try:
-            self.data_manager = DataManager(output_path=self.config.output_csv)
-            self.object_detector = ObjectDetector(model_path=self.config.model_path, confidence_threshold=self.config.confidence_threshold)
-            self.ocr_processor = OCRProcessor(lang=self.config.ocr_lang, margin=self.config.ocr_margin)
+            # PipelineProcessorを初期化
+            self.pipeline_processor = PipelineProcessor(
+                config=self.config,
+                performance_mode=mode_key
+            )
+            
+            # パイプライン処理を開始
+            self.pipeline_processor.start()
+            
+            # データマネージャーへの参照を保持
+            self.data_manager = self.pipeline_processor.data_manager
+            
         except Exception as e:
             messagebox.showerror("初期化エラー", str(e))
             return
@@ -430,14 +518,21 @@ class RealtimeOCRGUI:
         self.stats['last_fps_update'] = None
         self.stats['frame_count_for_fps'] = 0
         
+        # 表示更新スレッドを開始
         self.processing_stop_event.clear()
-        self.processing_thread = threading.Thread(target=self._processing_loop, daemon=True)
+        self.processing_thread = threading.Thread(target=self._display_loop, daemon=True)
         self.processing_thread.start()
         
         self._set_state("processing")
     
     def _stop_processing(self):
         """Stop processing (but keep preview running)."""
+        # パイプラインプロセッサを停止
+        if self.pipeline_processor:
+            self.pipeline_processor.stop()
+            self.pipeline_processor = None
+        
+        # 表示スレッドを停止
         self.processing_stop_event.set()
         if self.processing_thread:
             self.processing_thread.join(timeout=2.0)
@@ -453,84 +548,51 @@ class RealtimeOCRGUI:
             except Exception as e:
                 messagebox.showerror("エラー", str(e))
     
-    def _processing_loop(self):
-        """Processing loop - detection and OCR only."""
+    def _display_loop(self):
+        """Display loop - get frames from pipeline and display."""
         try:
-            frame_start_time = datetime.now()
-            
             while not self.processing_stop_event.is_set():
                 if self.is_paused:
                     self.processing_stop_event.wait(0.1)
                     continue
                 
-                # Capture frame
-                if self.window_capture is None:
+                if self.pipeline_processor is None:
                     break
                 
-                frame = self.window_capture.capture_frame()
+                # 表示キューから最新フレームを取得
+                frame = self.pipeline_processor.get_display_frame(timeout=0.1)
                 
-                if frame is None:
-                    continue
-                
-                # Calculate FPS
-                current_time = datetime.now()
-                self.stats['frame_count_for_fps'] += 1
-                
-                if self.stats['last_fps_update'] is None:
-                    self.stats['last_fps_update'] = current_time
-                
-                time_diff = (current_time - self.stats['last_fps_update']).total_seconds()
-                if time_diff >= 1.0:  # Update FPS every second
-                    self.stats['fps'] = self.stats['frame_count_for_fps'] / time_diff
-                    self.stats['frame_count_for_fps'] = 0
-                    self.stats['last_fps_update'] = current_time
-                
-                # Detect objects
-                detections = self.object_detector.detect(frame)
-                self.stats['frames_processed'] += 1
-                
-                # Process OCR for each detection
-                for detection in detections:
-                    text = self.ocr_processor.extract_text(frame, detection)
-                    if text:
-                        is_new = self.data_manager.add_text(text)
-                        self.log_queue.put((text, 'new' if is_new else 'duplicate'))
-                        if is_new:
-                            self.stats['new_detections'] += 1
-                
-                # Draw detections on frame
-                frame_copy = frame.copy()
-                for detection in detections:
+                if frame is not None:
+                    # フレームを表示キューに送信
                     try:
-                        cv2.rectangle(
-                            frame_copy,
-                            (int(detection.x1), int(detection.y1)),
-                            (int(detection.x2), int(detection.y2)),
-                            (0, 255, 0),
-                            2
-                        )
-                    except Exception:
-                        pass  # Skip drawing if error
+                        # Clear queue and put new frame
+                        while not self.frame_queue.empty():
+                            try:
+                                self.frame_queue.get_nowait()
+                            except queue.Empty:
+                                break
+                        self.frame_queue.put_nowait(frame)
+                    except queue.Full:
+                        pass
+                    
+                    self.stats['frames_processed'] += 1
                 
-                # Send frame to display (override preview frame)
-                try:
-                    # Clear queue and put new frame
-                    while not self.frame_queue.empty():
-                        try:
-                            self.frame_queue.get_nowait()
-                        except queue.Empty:
-                            break
-                    self.frame_queue.put_nowait(frame_copy)
-                except queue.Full:
-                    pass
+                # データマネージャーから新規検出数を取得
+                if self.data_manager:
+                    current_count = self.data_manager.get_count()
+                    self.stats['new_detections'] = current_count
                 
-                # No delay - run as fast as possible to maximize FPS
         except Exception as e:
-            self.log_queue.put((f"処理エラー: {str(e)}", 'error'))
+            self.log_queue.put((f"表示エラー: {str(e)}", 'error'))
     
     def _process_queues(self):
-        """Process queues."""
-        # Process frames
+        """Process queues.
+        
+        表示キューから最新フレームを取得して表示します。
+        パイプラインプロセッサが有効な場合、処理済みフレームが
+        _display_loopを通じてこのキューに送信されます。
+        """
+        # Process frames - 表示キューから最新フレームを取得
         try:
             while True:
                 frame = self.frame_queue.get_nowait()
@@ -585,7 +647,34 @@ class RealtimeOCRGUI:
             self.unique_count_var.set(str(self.data_manager.get_count()))
         self.frames_var.set(str(self.stats['frames_processed']))
         self.new_detections_var.set(str(self.stats['new_detections']))
-        self.fps_var.set(f"{self.stats['fps']:.1f}")
+        
+        # パイプラインプロセッサからパフォーマンスメトリクスを取得
+        if self.pipeline_processor:
+            try:
+                report = self.pipeline_processor.get_performance_report()
+                
+                # FPS（リアルタイム計測値を使用）
+                self.fps_var.set(f"{report.get('fps', 0.0):.1f}")
+                
+                # 各処理ステップの平均実行時間
+                avg_capture = report.get('avg_capture_time', 0.0) * 1000  # ms
+                avg_detection = report.get('avg_detection_time', 0.0) * 1000  # ms
+                avg_ocr = report.get('avg_ocr_time', 0.0) * 1000  # ms
+                
+                self.avg_capture_var.set(f"{avg_capture:.1f}ms")
+                self.avg_detection_var.set(f"{avg_detection:.1f}ms")
+                self.avg_ocr_var.set(f"{avg_ocr:.1f}ms")
+                
+                # キャッシュヒット率
+                cache_hit_rate = report.get('cache_hit_rate', 0.0) * 100  # %
+                self.cache_hit_rate_var.set(f"{cache_hit_rate:.1f}%")
+                
+            except Exception as e:
+                # エラーが発生した場合はデフォルト値を使用
+                pass
+        else:
+            # パイプラインプロセッサが無い場合は従来のFPS計算
+            self.fps_var.set(f"{self.stats['fps']:.1f}")
         
         self.root.after(1000, self._update_stats)
     

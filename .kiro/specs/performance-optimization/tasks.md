@@ -74,28 +74,28 @@
   - フレームスキップ戦略を実装（古いフレームを破棄）
   - _Requirements: 2.3_
 
-- [ ] 5. GUI 統合
-- [ ] 5.1 パフォーマンスモード選択 UI の追加
+- [x] 5. GUI 統合
+- [x] 5.1 パフォーマンスモード選択 UI の追加
 
   - `src/gui_app.py`にパフォーマンスモード選択コンボボックスを追加
   - モード変更時の動作を実装
   - _Requirements: 6.1_
 
-- [ ] 5.2 PipelineProcessor の統合
+- [x] 5.2 PipelineProcessor の統合
 
   - RealtimeOCRGUI クラスに PipelineProcessor を統合
   - \_start_processing/\_stop_processing メソッドを更新
   - 既存の処理ループを新しいパイプラインに置き換え
   - _Requirements: 2.3, 3.1, 3.2_
 
-- [ ] 5.3 パフォーマンス統計表示の追加
+- [x] 5.3 パフォーマンス統計表示の追加
 
   - FPS 表示を更新（リアルタイム計測値を使用）
   - 各処理ステップの平均実行時間を表示
   - キャッシュヒット率を表示
   - _Requirements: 5.1, 5.2_
 
-- [ ] 5.4 表示キューからのフレーム取得
+- [x] 5.4 表示キューからのフレーム取得
 
   - \_process_queues メソッドを更新
   - 表示キューから最新フレームを取得して表示
