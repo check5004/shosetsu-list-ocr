@@ -96,13 +96,34 @@ models/best.pt
 
 ## 使用方法
 
-### 基本的な使い方
+### GUIモード（推奨）
+
+グラフィカルユーザーインターフェースを使用して、視覚的に操作できます。
 
 ```bash
 # 仮想環境をアクティベート（作成した場合）
 source venv/bin/activate
 
-# アプリケーションを実行
+# GUIモードで起動
+python src/gui_app.py
+```
+
+**GUIの機能**:
+- **設定パネル**: ウィンドウタイトル、信頼度しきい値、OCR言語、出力パスなどを設定
+- **制御パネル**: 開始/停止、一時停止/再開、CSV出力ボタン
+- **リアルタイムプレビュー**: 検出結果をリアルタイムで表示
+- **データログ**: 抽出されたテキストをリアルタイムで表示（新規/重複を色分け）
+- **統計情報**: 抽出件数、処理フレーム数、検出数、実行時間、FPSを表示
+
+### CLIモード（コマンドライン）
+
+従来のコマンドラインインターフェースでも実行できます。
+
+```bash
+# 仮想環境をアクティベート（作成した場合）
+source venv/bin/activate
+
+# CLIモードで実行
 python src/realtime_ocr_app.py
 ```
 
@@ -118,6 +139,12 @@ python src/realtime_ocr_app.py
 
 ### 終了方法
 
+**GUIモード**:
+- **停止ボタン**: GUIの「停止」ボタンをクリック
+- **ウィンドウを閉じる**: GUIウィンドウの閉じるボタン（×）をクリック
+- **CSV出力ボタン**: 実行中でも「CSV出力」ボタンでいつでも保存可能
+
+**CLIモード**:
 - **'q'キー**: プレビューウィンドウで'q'キーを押すと終了
 - **Ctrl+C**: ターミナルでCtrl+Cを押すと安全に終了
 
@@ -128,8 +155,11 @@ python src/realtime_ocr_app.py
 ```
 .
 ├── src/                    # ソースコード
-│   ├── realtime_ocr_app.py # メインアプリケーション
+│   ├── gui_app.py          # GUIアプリケーション（推奨）
+│   ├── realtime_ocr_app.py # CLIアプリケーション
 │   ├── window_capture.py   # ウィンドウキャプチャモジュール
+│   ├── region_capture.py   # 領域キャプチャモジュール（GUI用）
+│   ├── region_selector.py  # 領域選択モジュール（GUI用）
 │   ├── object_detector.py  # YOLOv8物体検出モジュール
 │   ├── ocr_processor.py    # OCRモジュール
 │   ├── data_manager.py     # データ管理モジュール
@@ -137,10 +167,12 @@ python src/realtime_ocr_app.py
 │   ├── error_handler.py    # エラーハンドリングモジュール
 │   └── config.py           # 設定管理
 ├── config/                 # 設定ファイル（オプション）
+│   └── config.example.yaml # サンプル設定ファイル
 ├── models/                 # YOLOv8モデルファイル
 │   └── best.pt            # 学習済みモデル
 ├── output/                 # 出力ファイル
 │   └── book_data_realtime.csv
+├── tests/                  # テストコード
 ├── requirements.txt        # Python依存関係
 └── README.md              # このファイル
 ```
@@ -201,6 +233,34 @@ which tesseract
 1. `confidence_threshold`を上げて検出数を減らす
 2. Apple Silicon環境でMPS（Metal Performance Shaders）が有効か確認
 3. 不要なアプリケーションを閉じてリソースを確保
+
+### GUIが起動しない
+
+**エラー**: `ModuleNotFoundError: No module named 'tkinter'`
+
+**解決策**:
+macOSの場合、Pythonに標準でtkinterが含まれていますが、Homebrewでインストールしたpython3の場合は以下を実行:
+```bash
+brew install python-tk@3.9  # または使用しているPythonバージョン
+```
+
+### 領域選択が機能しない
+
+**問題**: GUI起動後に「領域を選択」ボタンをクリックしても反応しない
+
+**解決策**:
+1. macOSの画面収録権限が付与されているか確認
+2. 選択したい画面/ウィンドウが表示されているか確認
+3. 選択後、Enterキーを押して確定、Escキーでキャンセル
+
+### データが重複して保存される
+
+**問題**: 同じデータが複数回CSVに保存される
+
+**解決策**:
+- アプリケーションは自動的に重複を排除します
+- GUIのデータログで重複データはグレー表示されます
+- 既存のCSVファイルに追記する場合は、手動で重複を削除してください
 
 ## 開発情報
 
