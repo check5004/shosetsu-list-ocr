@@ -22,7 +22,7 @@
   - get_cached_text/update_cacheメソッドを実装
   - _Requirements: 4.1, 4.2_
 
-- [ ] 3. パフォーマンスモード設定の実装
+- [x] 3. パフォーマンスモード設定の実装
   - `src/performance_mode.py`を作成
   - PerformanceModeデータクラスを定義
   - 3つのプリセット（fast/balanced/accurate）を定義
