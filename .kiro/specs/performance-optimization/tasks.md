@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. パフォーマンス計測基盤の実装
+- [x] 1. パフォーマンス計測基盤の実装
   - `src/performance_monitor.py`を作成し、PerformanceMonitorクラスを実装
   - タイマー機能（start_timer/end_timer）を実装
   - FPSカウンター機能を実装
