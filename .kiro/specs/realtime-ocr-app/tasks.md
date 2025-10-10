@@ -101,21 +101,21 @@
   - サンプル画像を使用した OCR テスト
   - _Requirements: 4.3, 4.4, 4.5_
 
-- [ ] 6. データ管理モジュールの実装
-- [ ] 6.1 DataManager クラスを作成
+- [x] 6. データ管理モジュールの実装
+- [x] 6.1 DataManager クラスを作成
 
   - `src/data_manager.py`を作成
   - DataManager クラスを定義し、初期化メソッドを実装（Set ベースの重複管理）
   - _Requirements: 5.1, 5.2_
 
-- [ ] 6.2 重複チェック機能を実装
+- [x] 6.2 重複チェック機能を実装
 
   - `add_text()`メソッドを実装
   - Set を使用した O(1)重複チェック
   - 新規データの場合はターミナルに出力
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 6.3 CSV 出力機能を実装
+- [x] 6.3 CSV 出力機能を実装
 
   - `export_to_csv()`メソッドを実装
   - pandas を使用して DataFrame を作成
