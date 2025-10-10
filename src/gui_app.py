@@ -508,7 +508,15 @@ class RealtimeOCRGUI:
             self.data_manager = self.pipeline_processor.data_manager
             
         except Exception as e:
+            self.log_queue.put((f"初期化エラー: {str(e)}", 'error'))
             messagebox.showerror("初期化エラー", str(e))
+            # クリーンアップ
+            if self.pipeline_processor:
+                try:
+                    self.pipeline_processor.stop()
+                except Exception:
+                    pass
+                self.pipeline_processor = None
             return
         
         self.stats['start_time'] = datetime.now()
@@ -527,17 +535,27 @@ class RealtimeOCRGUI:
     
     def _stop_processing(self):
         """Stop processing (but keep preview running)."""
-        # パイプラインプロセッサを停止
-        if self.pipeline_processor:
-            self.pipeline_processor.stop()
-            self.pipeline_processor = None
-        
-        # 表示スレッドを停止
-        self.processing_stop_event.set()
-        if self.processing_thread:
-            self.processing_thread.join(timeout=2.0)
-        
-        self._set_state("preview")
+        try:
+            # パイプラインプロセッサを停止
+            if self.pipeline_processor:
+                try:
+                    self.pipeline_processor.stop()
+                except Exception as e:
+                    self.log_queue.put((f"パイプライン停止エラー: {str(e)}", 'error'))
+                finally:
+                    self.pipeline_processor = None
+            
+            # 表示スレッドを停止
+            self.processing_stop_event.set()
+            if self.processing_thread and self.processing_thread.is_alive():
+                self.processing_thread.join(timeout=2.0)
+                if self.processing_thread.is_alive():
+                    self.log_queue.put(("表示スレッドが正常に停止しませんでした", 'warning'))
+            
+            self._set_state("preview")
+            
+        except Exception as e:
+            self.log_queue.put((f"処理停止エラー: {str(e)}", 'error'))
     
     def _export_csv(self):
         """Export to CSV."""
@@ -550,40 +568,71 @@ class RealtimeOCRGUI:
     
     def _display_loop(self):
         """Display loop - get frames from pipeline and display."""
+        consecutive_errors = 0
+        max_consecutive_errors = 10
+        
         try:
             while not self.processing_stop_event.is_set():
-                if self.is_paused:
-                    self.processing_stop_event.wait(0.1)
-                    continue
-                
-                if self.pipeline_processor is None:
-                    break
-                
-                # 表示キューから最新フレームを取得
-                frame = self.pipeline_processor.get_display_frame(timeout=0.1)
-                
-                if frame is not None:
-                    # フレームを表示キューに送信
-                    try:
-                        # Clear queue and put new frame
-                        while not self.frame_queue.empty():
-                            try:
-                                self.frame_queue.get_nowait()
-                            except queue.Empty:
-                                break
-                        self.frame_queue.put_nowait(frame)
-                    except queue.Full:
-                        pass
+                try:
+                    if self.is_paused:
+                        self.processing_stop_event.wait(0.1)
+                        continue
                     
-                    self.stats['frames_processed'] += 1
+                    if self.pipeline_processor is None:
+                        break
+                    
+                    # パイプラインが実行中かチェック
+                    if not self.pipeline_processor.is_running():
+                        self.log_queue.put(("パイプラインが停止しました", 'warning'))
+                        break
+                    
+                    # 表示キューから最新フレームを取得
+                    frame = self.pipeline_processor.get_display_frame(timeout=0.1)
+                    
+                    if frame is not None:
+                        # フレームを表示キューに送信
+                        try:
+                            # Clear queue and put new frame
+                            while not self.frame_queue.empty():
+                                try:
+                                    self.frame_queue.get_nowait()
+                                except queue.Empty:
+                                    break
+                            self.frame_queue.put_nowait(frame)
+                        except queue.Full:
+                            pass
+                        
+                        self.stats['frames_processed'] += 1
+                        consecutive_errors = 0  # 成功したらリセット
+                    
+                    # データマネージャーから新規検出数を取得
+                    if self.data_manager:
+                        try:
+                            current_count = self.data_manager.get_count()
+                            self.stats['new_detections'] = current_count
+                        except Exception as dm_error:
+                            self.log_queue.put((f"データマネージャーエラー: {str(dm_error)}", 'warning'))
                 
-                # データマネージャーから新規検出数を取得
-                if self.data_manager:
-                    current_count = self.data_manager.get_count()
-                    self.stats['new_detections'] = current_count
+                except Exception as e:
+                    consecutive_errors += 1
+                    self.log_queue.put((f"表示ループエラー (試行 {consecutive_errors}/{max_consecutive_errors}): {str(e)}", 'error'))
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        self.log_queue.put(("連続エラーが多すぎるため、表示ループを停止します", 'error'))
+                        break
+                    
+                    self.processing_stop_event.wait(0.1)
                 
         except Exception as e:
-            self.log_queue.put((f"表示エラー: {str(e)}", 'error'))
+            self.log_queue.put((f"表示ループの致命的エラー: {str(e)}", 'error'))
+        
+        finally:
+            # クリーンアップ
+            if self.pipeline_processor:
+                try:
+                    self.pipeline_processor.stop()
+                except Exception:
+                    pass
     
     def _process_queues(self):
         """Process queues.

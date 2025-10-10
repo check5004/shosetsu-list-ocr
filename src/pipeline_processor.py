@@ -132,27 +132,50 @@ class PipelineProcessor:
         """
         logger.info("Stopping pipeline...")
         
-        # 停止シグナルを送信
-        self.stop_event.set()
-        
-        # スレッドの終了を待機
-        if self.capture_thread and self.capture_thread.is_alive():
-            self.capture_thread.join(timeout=2.0)
-        
-        if self.detection_thread and self.detection_thread.is_alive():
-            self.detection_thread.join(timeout=2.0)
-        
-        # OCRスレッドプールのシャットダウン
-        if self.ocr_executor:
-            self.ocr_executor.shutdown(wait=True, cancel_futures=True)
-            self.ocr_executor = None
-        
-        # キューをクリア
-        self._clear_queue(self.frame_queue)
-        self._clear_queue(self.detection_queue)
-        self._clear_queue(self.display_queue)
-        
-        logger.info("Pipeline stopped")
+        try:
+            # 停止シグナルを送信
+            self.stop_event.set()
+            
+            # スレッドの終了を待機
+            if self.capture_thread and self.capture_thread.is_alive():
+                logger.debug("Waiting for capture thread to stop...")
+                self.capture_thread.join(timeout=2.0)
+                if self.capture_thread.is_alive():
+                    logger.warning("Capture thread did not stop gracefully")
+            
+            if self.detection_thread and self.detection_thread.is_alive():
+                logger.debug("Waiting for detection thread to stop...")
+                self.detection_thread.join(timeout=2.0)
+                if self.detection_thread.is_alive():
+                    logger.warning("Detection thread did not stop gracefully")
+            
+            # OCRスレッドプールのシャットダウン
+            if self.ocr_executor:
+                logger.debug("Shutting down OCR thread pool...")
+                try:
+                    self.ocr_executor.shutdown(wait=True, cancel_futures=True)
+                except Exception as e:
+                    logger.error(f"Error shutting down OCR executor: {e}")
+                finally:
+                    self.ocr_executor = None
+            
+            # キューをクリア
+            self._clear_queue(self.frame_queue)
+            self._clear_queue(self.detection_queue)
+            self._clear_queue(self.display_queue)
+            
+            # コンポーネントのクリーンアップ
+            self._cleanup_components()
+            
+            logger.info("Pipeline stopped successfully")
+            
+        except Exception as e:
+            logger.error(f"Error during pipeline shutdown: {e}")
+            # エラーが発生してもクリーンアップを試みる
+            try:
+                self._cleanup_components()
+            except Exception as cleanup_error:
+                logger.error(f"Error during cleanup: {cleanup_error}")
     
     def _initialize_components(self) -> None:
         """コンポーネントを初期化"""
@@ -182,12 +205,55 @@ class PipelineProcessor:
     
     @staticmethod
     def _clear_queue(q: queue.Queue) -> None:
-        """キューをクリア"""
-        while not q.empty():
-            try:
-                q.get_nowait()
-            except queue.Empty:
-                break
+        """キューをクリア
+        
+        Args:
+            q: クリアするキュー
+        """
+        try:
+            while not q.empty():
+                try:
+                    q.get_nowait()
+                except queue.Empty:
+                    break
+        except Exception as e:
+            logger.error(f"Error clearing queue: {e}")
+    
+    def _cleanup_components(self) -> None:
+        """コンポーネントのリソースをクリーンアップ
+        
+        各コンポーネントが保持しているリソース（ウィンドウ、モデルなど）を
+        適切に解放します。
+        """
+        try:
+            # Visualizerのクリーンアップ
+            if self.visualizer:
+                try:
+                    self.visualizer.close()
+                except Exception as e:
+                    logger.error(f"Error closing visualizer: {e}")
+                finally:
+                    self.visualizer = None
+            
+            # WindowCaptureのクリーンアップ
+            if self.window_capture:
+                try:
+                    # WindowCaptureは__del__でクリーンアップされるが、明示的に参照を削除
+                    del self.window_capture
+                except Exception as e:
+                    logger.error(f"Error cleaning up window capture: {e}")
+                finally:
+                    self.window_capture = None
+            
+            # その他のコンポーネントの参照をクリア
+            self.object_detector = None
+            self.ocr_processor = None
+            self.data_manager = None
+            
+            logger.debug("Components cleaned up")
+            
+        except Exception as e:
+            logger.error(f"Error during component cleanup: {e}")
     
     def _capture_loop(self) -> None:
         """キャプチャスレッドのメインループ
@@ -196,39 +262,58 @@ class PipelineProcessor:
         フレームキューに非ブロッキングで追加します。
         """
         logger.info("Capture thread started")
+        consecutive_errors = 0
+        max_consecutive_errors = 10
         
-        while not self.stop_event.is_set():
-            try:
-                # パフォーマンス計測開始
-                self.performance_monitor.start_timer('capture')
-                
-                # フレームをキャプチャ
-                frame = self.window_capture.capture_frame()
-                
-                # パフォーマンス計測終了
-                self.performance_monitor.end_timer('capture')
-                
-                # フレームキューに非ブロッキングで追加
-                # キューが満杯の場合は古いフレームを破棄
+        try:
+            while not self.stop_event.is_set():
                 try:
-                    self.frame_queue.put_nowait(frame)
-                except queue.Full:
-                    # キューが満杯の場合、古いフレームを破棄して新しいフレームを追加
+                    # パフォーマンス計測開始
+                    self.performance_monitor.start_timer('capture')
+                    
+                    # フレームをキャプチャ
+                    frame = self.window_capture.capture_frame()
+                    
+                    # パフォーマンス計測終了
+                    self.performance_monitor.end_timer('capture')
+                    
+                    # 成功したらエラーカウンタをリセット
+                    consecutive_errors = 0
+                    
+                    # フレームキューに非ブロッキングで追加
+                    # キューが満杯の場合は古いフレームを破棄
                     try:
-                        self.frame_queue.get_nowait()
                         self.frame_queue.put_nowait(frame)
-                        self.performance_monitor.record_frame_skip()
-                    except (queue.Empty, queue.Full):
-                        pass
-                
-                # 30FPS目標で適度にスリープ
-                time.sleep(0.033)  # 約30FPS
-                
-            except Exception as e:
-                logger.error(f"Error in capture loop: {e}")
-                time.sleep(0.1)  # エラー時は少し待機
+                    except queue.Full:
+                        # キューが満杯の場合、古いフレームを破棄して新しいフレームを追加
+                        try:
+                            self.frame_queue.get_nowait()
+                            self.frame_queue.put_nowait(frame)
+                            self.performance_monitor.record_frame_skip()
+                        except (queue.Empty, queue.Full):
+                            pass
+                    
+                    # 30FPS目標で適度にスリープ
+                    time.sleep(0.033)  # 約30FPS
+                    
+                except Exception as e:
+                    consecutive_errors += 1
+                    logger.error(f"Error in capture loop (attempt {consecutive_errors}/{max_consecutive_errors}): {e}")
+                    
+                    # 連続エラーが多すぎる場合は停止
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.critical("Too many consecutive errors in capture loop, stopping thread")
+                        self.stop_event.set()
+                        break
+                    
+                    time.sleep(0.1)  # エラー時は少し待機
         
-        logger.info("Capture thread stopped")
+        except Exception as e:
+            logger.critical(f"Fatal error in capture loop: {e}")
+            self.stop_event.set()
+        
+        finally:
+            logger.info("Capture thread stopped")
     
     def _detection_loop(self) -> None:
         """検出スレッドのメインループ
@@ -237,85 +322,112 @@ class PipelineProcessor:
         検出キャッシュを使用して重複検出を回避します。
         """
         logger.info("Detection thread started")
+        consecutive_errors = 0
+        max_consecutive_errors = 10
         
-        while not self.stop_event.is_set():
-            try:
-                # フレームキューから取得（タイムアウト付き）
+        try:
+            while not self.stop_event.is_set():
                 try:
-                    frame = self.frame_queue.get(timeout=1.0)
-                except queue.Empty:
-                    continue
-                
-                # フレームスキップ判定
-                self.frame_counter += 1
-                if self.frame_counter % self.mode.frame_skip != 0:
-                    self.performance_monitor.record_frame_skip()
-                    continue
-                
-                detections = None
-                
-                # 検出キャッシュが有効な場合
-                if self.detection_cache:
-                    # キャッシュヒット判定
-                    if self.detection_cache.should_skip_detection(frame):
-                        detections = self.detection_cache.get_cached_detections()
-                        if detections is not None:
-                            self.performance_monitor.record_cache_hit()
-                            logger.debug("Detection cache hit")
-                        else:
-                            self.performance_monitor.record_cache_miss()
-                    else:
-                        self.performance_monitor.record_cache_miss()
-                
-                # キャッシュミスまたはキャッシュ無効の場合、検出を実行
-                if detections is None:
-                    # パフォーマンス計測開始
-                    self.performance_monitor.start_timer('detection')
-                    
-                    # 物体検出を実行
-                    detections = self.object_detector.detect(frame)
-                    
-                    # パフォーマンス計測終了
-                    self.performance_monitor.end_timer('detection')
-                    
-                    # 検出キャッシュを更新
-                    if self.detection_cache:
-                        self.detection_cache.update_cache(frame, detections)
-                
-                # 検出数を制限
-                if len(detections) > self.mode.max_detections_per_frame:
-                    # Y座標でソートして上位のみ処理
-                    detections = ObjectDetector.sort_by_y_coordinate(detections)
-                    detections = detections[:self.mode.max_detections_per_frame]
-                
-                # 検出結果キューに送信
-                detection_data = {
-                    'frame': frame,
-                    'detections': detections
-                }
-                
-                try:
-                    self.detection_queue.put_nowait(detection_data)
-                except queue.Full:
-                    # キューが満杯の場合、古いデータを破棄
+                    # フレームキューから取得（タイムアウト付き）
                     try:
-                        self.detection_queue.get_nowait()
+                        frame = self.frame_queue.get(timeout=1.0)
+                    except queue.Empty:
+                        continue
+                    
+                    # フレームスキップ判定
+                    self.frame_counter += 1
+                    if self.frame_counter % self.mode.frame_skip != 0:
+                        self.performance_monitor.record_frame_skip()
+                        continue
+                    
+                    detections = None
+                    
+                    # 検出キャッシュが有効な場合（フォールバック処理付き）
+                    if self.detection_cache:
+                        try:
+                            # キャッシュヒット判定
+                            if self.detection_cache.should_skip_detection(frame):
+                                detections = self.detection_cache.get_cached_detections()
+                                if detections is not None:
+                                    self.performance_monitor.record_cache_hit()
+                                    logger.debug("Detection cache hit")
+                                else:
+                                    self.performance_monitor.record_cache_miss()
+                            else:
+                                self.performance_monitor.record_cache_miss()
+                        except Exception as cache_error:
+                            logger.warning(f"Detection cache error, falling back to detection: {cache_error}")
+                            self.performance_monitor.record_cache_miss()
+                            detections = None
+                    
+                    # キャッシュミスまたはキャッシュ無効の場合、検出を実行
+                    if detections is None:
+                        # パフォーマンス計測開始
+                        self.performance_monitor.start_timer('detection')
+                        
+                        # 物体検出を実行
+                        detections = self.object_detector.detect(frame)
+                        
+                        # パフォーマンス計測終了
+                        self.performance_monitor.end_timer('detection')
+                        
+                        # 検出キャッシュを更新（エラー時はスキップ）
+                        if self.detection_cache:
+                            try:
+                                self.detection_cache.update_cache(frame, detections)
+                            except Exception as cache_error:
+                                logger.warning(f"Failed to update detection cache: {cache_error}")
+                    
+                    # 検出数を制限
+                    if len(detections) > self.mode.max_detections_per_frame:
+                        # Y座標でソートして上位のみ処理
+                        detections = ObjectDetector.sort_by_y_coordinate(detections)
+                        detections = detections[:self.mode.max_detections_per_frame]
+                    
+                    # 検出結果キューに送信
+                    detection_data = {
+                        'frame': frame,
+                        'detections': detections
+                    }
+                    
+                    try:
                         self.detection_queue.put_nowait(detection_data)
-                    except (queue.Empty, queue.Full):
-                        pass
-                
-                # OCR処理を開始（非同期）
-                if detections:
-                    self._process_ocr_parallel(frame, detections)
-                
-                # 検出結果を描画したフレームを表示キューに送信
-                self._send_to_display_queue(frame, detections)
-                
-            except Exception as e:
-                logger.error(f"Error in detection loop: {e}")
-                time.sleep(0.1)
+                    except queue.Full:
+                        # キューが満杯の場合、古いデータを破棄
+                        try:
+                            self.detection_queue.get_nowait()
+                            self.detection_queue.put_nowait(detection_data)
+                        except (queue.Empty, queue.Full):
+                            pass
+                    
+                    # OCR処理を開始（非同期）
+                    if detections:
+                        self._process_ocr_parallel(frame, detections)
+                    
+                    # 検出結果を描画したフレームを表示キューに送信
+                    self._send_to_display_queue(frame, detections)
+                    
+                    # 成功したらエラーカウンタをリセット
+                    consecutive_errors = 0
+                    
+                except Exception as e:
+                    consecutive_errors += 1
+                    logger.error(f"Error in detection loop (attempt {consecutive_errors}/{max_consecutive_errors}): {e}")
+                    
+                    # 連続エラーが多すぎる場合は停止
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.critical("Too many consecutive errors in detection loop, stopping thread")
+                        self.stop_event.set()
+                        break
+                    
+                    time.sleep(0.1)
         
-        logger.info("Detection thread stopped")
+        except Exception as e:
+            logger.critical(f"Fatal error in detection loop: {e}")
+            self.stop_event.set()
+        
+        finally:
+            logger.info("Detection thread stopped")
     
     def _process_ocr_parallel(self, frame: np.ndarray, detections: List[DetectionResult]) -> None:
         """OCR処理を並列実行
@@ -337,14 +449,18 @@ class PipelineProcessor:
         def process_single_detection(bbox: DetectionResult) -> Optional[str]:
             """単一の検出領域に対してOCR処理を実行"""
             try:
-                # OCRキャッシュが有効な場合
+                # OCRキャッシュが有効な場合（フォールバック処理付き）
                 if self.ocr_cache:
-                    cached_text = self.ocr_cache.get_cached_text(bbox)
-                    if cached_text is not None:
-                        self.performance_monitor.record_cache_hit()
-                        logger.debug(f"OCR cache hit for bbox: ({bbox.x1}, {bbox.y1})")
-                        return cached_text
-                    else:
+                    try:
+                        cached_text = self.ocr_cache.get_cached_text(bbox)
+                        if cached_text is not None:
+                            self.performance_monitor.record_cache_hit()
+                            logger.debug(f"OCR cache hit for bbox: ({bbox.x1}, {bbox.y1})")
+                            return cached_text
+                        else:
+                            self.performance_monitor.record_cache_miss()
+                    except Exception as cache_error:
+                        logger.warning(f"OCR cache error, falling back to OCR: {cache_error}")
                         self.performance_monitor.record_cache_miss()
                 
                 # パフォーマンス計測開始
@@ -356,31 +472,52 @@ class PipelineProcessor:
                 # パフォーマンス計測終了
                 self.performance_monitor.end_timer('ocr')
                 
-                # OCRキャッシュを更新
+                # OCRキャッシュを更新（エラー時はスキップ）
                 if self.ocr_cache and text:
-                    self.ocr_cache.update_cache(bbox, text)
+                    try:
+                        self.ocr_cache.update_cache(bbox, text)
+                    except Exception as cache_error:
+                        logger.warning(f"Failed to update OCR cache: {cache_error}")
                 
                 return text
                 
             except Exception as e:
-                logger.error(f"Error in OCR processing: {e}")
+                logger.error(f"Error in OCR processing for bbox ({bbox.x1}, {bbox.y1}): {e}")
                 return None
         
         # 並列OCR処理を実行
         futures = []
-        for bbox in sorted_detections:
-            future = self.ocr_executor.submit(process_single_detection, bbox)
-            futures.append(future)
+        try:
+            for bbox in sorted_detections:
+                if self.stop_event.is_set():
+                    # 停止シグナルが出ている場合は新しいタスクを投入しない
+                    break
+                future = self.ocr_executor.submit(process_single_detection, bbox)
+                futures.append(future)
+            
+            # 結果を収集してデータマネージャーに送信
+            for future in futures:
+                if self.stop_event.is_set():
+                    # 停止シグナルが出ている場合は残りの結果を待たない
+                    future.cancel()
+                    continue
+                
+                try:
+                    text = future.result(timeout=5.0)  # 5秒タイムアウト
+                    if text and len(text) >= self.config.min_text_length:
+                        # データマネージャーに追加
+                        try:
+                            self.data_manager.add_text(text)
+                        except Exception as dm_error:
+                            logger.error(f"Error adding text to data manager: {dm_error}")
+                except TimeoutError:
+                    logger.warning(f"OCR processing timed out after 5 seconds")
+                    future.cancel()
+                except Exception as e:
+                    logger.error(f"Error getting OCR result: {e}")
         
-        # 結果を収集してデータマネージャーに送信
-        for future in futures:
-            try:
-                text = future.result(timeout=5.0)  # 5秒タイムアウト
-                if text and len(text) >= self.config.min_text_length:
-                    # データマネージャーに追加
-                    self.data_manager.add_text(text)
-            except Exception as e:
-                logger.error(f"Error getting OCR result: {e}")
+        except Exception as e:
+            logger.error(f"Error in parallel OCR processing: {e}")
     
     def get_display_frame(self, timeout: float = 0.1) -> Optional[np.ndarray]:
         """表示用フレームを取得
@@ -394,6 +531,9 @@ class PipelineProcessor:
         try:
             return self.display_queue.get(timeout=timeout)
         except queue.Empty:
+            return None
+        except Exception as e:
+            logger.error(f"Error getting display frame: {e}")
             return None
     
     def _send_to_display_queue(self, frame: np.ndarray, detections: List[DetectionResult]) -> None:
@@ -424,17 +564,17 @@ class PipelineProcessor:
                 self.display_queue.put_nowait(annotated_frame)
             except queue.Full:
                 # 古いフレームを全て破棄
-                while not self.display_queue.empty():
-                    try:
-                        self.display_queue.get_nowait()
-                    except queue.Empty:
-                        break
-                
-                # 最新フレームを追加
                 try:
+                    while not self.display_queue.empty():
+                        try:
+                            self.display_queue.get_nowait()
+                        except queue.Empty:
+                            break
+                    
+                    # 最新フレームを追加
                     self.display_queue.put_nowait(annotated_frame)
-                except queue.Full:
-                    pass
+                except (queue.Empty, queue.Full) as e:
+                    logger.debug(f"Queue operation failed during frame skip: {e}")
         
         except Exception as e:
             logger.error(f"Error sending to display queue: {e}")
@@ -445,4 +585,30 @@ class PipelineProcessor:
         Returns:
             パフォーマンスメトリクスを含む辞書
         """
-        return self.performance_monitor.get_report()
+        try:
+            return self.performance_monitor.get_report()
+        except Exception as e:
+            logger.error(f"Error getting performance report: {e}")
+            return {
+                'fps': 0.0,
+                'avg_capture_time': 0.0,
+                'avg_detection_time': 0.0,
+                'avg_ocr_time': 0.0,
+                'avg_display_time': 0.0,
+                'cache_hit_rate': 0.0,
+                'frames_processed': 0,
+                'frames_skipped': 0
+            }
+    
+    def is_running(self) -> bool:
+        """パイプラインが実行中かどうかを確認
+        
+        Returns:
+            実行中の場合True、それ以外False
+        """
+        return (
+            not self.stop_event.is_set() and
+            self.capture_thread is not None and
+            self.detection_thread is not None and
+            self.ocr_executor is not None
+        )
