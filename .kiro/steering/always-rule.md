@@ -49,6 +49,9 @@ This is a real-time OCR application for macOS that captures iPhone simulator/mir
 - Validate configuration on load using AppConfig.validate() method
 - Test with actual iPhone simulator windows for integration testing
 - Handle missing dependencies gracefully with informative error messages
+- **ALWAYS use virtual environment (venv/) for testing and development**
+- Run tests using `./venv/bin/pytest` or activate venv first with `source venv/bin/activate`
+- Never install packages globally; always use the project's virtual environment
 
 ## Dependencies
 

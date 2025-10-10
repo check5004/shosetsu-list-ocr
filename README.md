@@ -42,12 +42,24 @@ tesseract --list-langs
 
 ### 3. Python仮想環境の作成（推奨）
 
+プロジェクト専用の仮想環境を作成することで、システムのPython環境に影響を与えずに依存関係を管理できます。
+
 ```bash
+# 仮想環境を作成
 python3 -m venv venv
+
+# 仮想環境を有効化
 source venv/bin/activate
+
+# 仮想環境を無効化する場合（終了時）
+deactivate
 ```
 
+**注意**: 仮想環境は`.gitignore`に含まれており、Gitリポジトリには追加されません。
+
 ### 4. 依存関係のインストール
+
+仮想環境を有効化した状態で、以下のコマンドを実行してください:
 
 ```bash
 pip install --upgrade pip
@@ -192,10 +204,40 @@ which tesseract
 
 ## 開発情報
 
-### テストの実行
+### 開発環境のセットアップ
+
+開発時は必ず仮想環境を使用してください:
 
 ```bash
-pytest tests/
+# 仮想環境を作成（初回のみ）
+python3 -m venv venv
+
+# 仮想環境を有効化
+source venv/bin/activate
+
+# 依存関係をインストール
+pip install -r requirements.txt
+```
+
+### テストの実行
+
+仮想環境を有効化した状態でテストを実行:
+
+```bash
+# 全テストを実行
+pytest tests/ -v
+
+# 特定のテストファイルを実行
+pytest tests/test_object_detector.py -v
+
+# カバレッジレポート付きで実行
+pytest tests/ --cov=src --cov-report=html
+```
+
+または、仮想環境を有効化せずに直接実行:
+
+```bash
+./venv/bin/pytest tests/ -v
 ```
 
 ### コードフォーマット
