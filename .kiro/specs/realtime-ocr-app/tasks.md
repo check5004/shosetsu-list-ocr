@@ -12,19 +12,19 @@
   - 設定の検証ロジックを実装
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 3. macOS専用ウィンドウキャプチャモジュールの実装
-- [ ] 3.1 WindowCaptureクラスの基本構造を作成
+- [x] 3. macOS専用ウィンドウキャプチャモジュールの実装
+- [x] 3.1 WindowCaptureクラスの基本構造を作成
   - `src/window_capture.py`を作成
   - WindowCaptureクラスを定義し、初期化メソッドを実装
   - _Requirements: 1.1, 1.5_
 
-- [ ] 3.2 Quartzを使用したウィンドウ検索機能を実装
+- [x] 3.2 Quartzを使用したウィンドウ検索機能を実装
   - `list_all_windows()`メソッドを実装（CGWindowListCopyWindowInfoを使用）
   - `find_window()`メソッドを実装（タイトル部分一致検索）
   - ウィンドウが見つからない場合のエラーハンドリング
   - _Requirements: 1.1, 1.2, 8.2_
 
-- [ ] 3.3 mssを使用したスクリーンキャプチャ機能を実装
+- [x] 3.3 mssを使用したスクリーンキャプチャ機能を実装
   - `capture_frame()`メソッドを実装
   - ウィンドウ座標からモニター領域を計算
   - BGRA→BGR変換を実装
