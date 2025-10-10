@@ -37,8 +37,9 @@ def main():
         detector = None
     else:
         print("🔍 YOLOv8モデルを読み込み中...")
-        detector = ObjectDetector(str(model_path), confidence_threshold=0.6)
+        detector = ObjectDetector(str(model_path), confidence_threshold=0.3)  # しきい値を下げて検出しやすく
         print(f"✅ モデル読み込み完了（デバイス: {detector.device}）")
+        print(f"   信頼度しきい値: 0.3")
         print()
     
     # OCRプロセッサの初期化
@@ -48,8 +49,10 @@ def main():
         print("✅ OCRプロセッサ初期化完了")
         print()
     except RuntimeError as e:
-        print(f"❌ OCRプロセッサの初期化に失敗: {e}")
-        return
+        print(f"⚠️  OCRプロセッサの初期化に失敗: {e}")
+        print("物体検出のみを実行します")
+        print()
+        ocr_processor = None
     
     # 物体検出を実行
     if detector:
@@ -71,15 +74,18 @@ def main():
                 print(f"   位置: ({bbox.x1}, {bbox.y1}) → ({bbox.x2}, {bbox.y2})")
                 print(f"   信頼度: {bbox.confidence:.2f}")
                 
-                # OCR実行
-                text = ocr_processor.extract_text(frame, bbox)
-                
-                if text:
-                    print(f"   📝 抽出テキスト:")
-                    for line in text.split('\n'):
-                        print(f"      {line}")
+                # OCR実行（OCRプロセッサが利用可能な場合のみ）
+                if ocr_processor:
+                    text = ocr_processor.extract_text(frame, bbox)
+                    
+                    if text:
+                        print(f"   📝 抽出テキスト:")
+                        for line in text.split('\n'):
+                            print(f"      {line}")
+                    else:
+                        print(f"   ⚠️  テキストが抽出できませんでした")
                 else:
-                    print(f"   ⚠️  テキストが抽出できませんでした")
+                    print(f"   ⚠️  OCR未実行（Tesseract未インストール）")
             
             print("\n" + "=" * 80)
             
