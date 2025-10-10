@@ -9,7 +9,7 @@ import queue
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, List
+from typing import Optional, List, Callable
 import logging
 
 import numpy as np
@@ -41,16 +41,19 @@ class PipelineProcessor:
         [表示スレッド] ← [表示キュー] ←┘
     """
     
-    def __init__(self, config: AppConfig, performance_mode: str = "balanced"):
+    def __init__(self, config: AppConfig, performance_mode: str = "balanced",
+                 on_new_text_callback: Optional[Callable[[str], None]] = None):
         """
         PipelineProcessorを初期化
         
         Args:
             config: アプリケーション設定
             performance_mode: パフォーマンスモード（"fast", "balanced", "accurate"）
+            on_new_text_callback: 新規テキスト検出時のコールバック関数
         """
         self.config = config
         self.mode = get_performance_mode(performance_mode)
+        self.on_new_text_callback = on_new_text_callback
         
         # Components
         self.window_capture: Optional[WindowCapture] = None
@@ -196,7 +199,10 @@ class PipelineProcessor:
         )
         
         # データマネージャー
-        self.data_manager = DataManager(output_path=self.config.output_csv)
+        self.data_manager = DataManager(
+            output_path=self.config.output_csv,
+            on_new_text_callback=self.on_new_text_callback
+        )
         
         # Visualizer
         self.visualizer = Visualizer(window_name=self.config.display_window_name)

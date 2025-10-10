@@ -498,7 +498,8 @@ class RealtimeOCRGUI:
             # PipelineProcessorを初期化
             self.pipeline_processor = PipelineProcessor(
                 config=self.config,
-                performance_mode=mode_key
+                performance_mode=mode_key,
+                on_new_text_callback=self._on_new_text_detected
             )
             
             # パイプライン処理を開始
@@ -565,6 +566,15 @@ class RealtimeOCRGUI:
                 messagebox.showinfo("成功", f"CSVに出力しました: {self.config.output_csv}")
             except Exception as e:
                 messagebox.showerror("エラー", str(e))
+    
+    def _on_new_text_detected(self, text: str):
+        """新規テキスト検出時のコールバック
+        
+        Args:
+            text: 検出された新規テキスト
+        """
+        # ログキューに新規テキストを追加
+        self.log_queue.put((f"[新規] {text}", 'new'))
     
     def _display_loop(self):
         """Display loop - get frames from pipeline and display."""
