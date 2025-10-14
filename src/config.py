@@ -35,7 +35,7 @@ class AppConfig:
     
     # Model settings
     model_path: str = "models/best.pt"
-    confidence_threshold: float = 0.6
+    confidence_threshold: float = 0.65  # 検出率とパフォーマンスのバランス（0.6→0.65に微調整）
     
     # Window capture settings
     target_window_title: str = "iPhone"
@@ -53,9 +53,9 @@ class AppConfig:
     
     # Performance settings
     performance_mode: str = "balanced"
-    detection_cache_ttl: float = 0.5
-    detection_cache_similarity: float = 0.95
-    ocr_cache_position_tolerance: int = 10
+    detection_cache_ttl: float = 0.7  # キャッシュ有効期限（1.0→0.7秒に短縮、新規検出を優先）
+    detection_cache_similarity: float = 0.93  # 類似度しきい値（0.90→0.93に調整、より厳密に）
+    ocr_cache_position_tolerance: int = 12  # 位置許容範囲（15→12ピクセルに調整）
     queue_max_size: int = 5
     display_queue_max_size: int = 2
     

@@ -101,8 +101,19 @@ class ObjectDetector:
         if self.model is None:
             raise RuntimeError("モデルが初期化されていません")
         
-        # YOLOv8で推論実行（verbose=Falseで出力を抑制）
-        results = self.model(frame, verbose=False, device=self.device)
+        # YOLOv8で推論実行（最適化設定）
+        # - verbose=False: 出力を抑制
+        # - imgsz=640: 入力画像サイズ（小さいほど高速だが精度低下）
+        # - conf=self.confidence_threshold: 信頼度しきい値（早期フィルタリング）
+        # - max_det=50: 最大検出数を制限（処理時間削減、20→50に緩和）
+        results = self.model(
+            frame, 
+            verbose=False, 
+            device=self.device,
+            imgsz=640,
+            conf=self.confidence_threshold,
+            max_det=50
+        )
         
         detections = []
         

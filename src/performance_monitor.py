@@ -253,7 +253,31 @@ class PerformanceMonitor:
         print(f"平均OCR時間: {report['avg_ocr_time']*1000:.2f} ms")
         print(f"平均表示時間: {report['avg_display_time']*1000:.2f} ms")
         print("-"*50)
+        
+        # 合計処理時間とボトルネック分析
+        total_time = (report['avg_capture_time'] + report['avg_detection_time'] + 
+                     report['avg_ocr_time'] + report['avg_display_time'])
+        
+        if total_time > 0:
+            print("処理時間の内訳:")
+            print(f"  キャプチャ: {report['avg_capture_time']/total_time*100:.1f}%")
+            print(f"  検出: {report['avg_detection_time']/total_time*100:.1f}%")
+            print(f"  OCR: {report['avg_ocr_time']/total_time*100:.1f}%")
+            print(f"  表示: {report['avg_display_time']/total_time*100:.1f}%")
+            print(f"合計処理時間: {total_time*1000:.2f} ms")
+            print(f"理論最大FPS: {1.0/total_time:.2f}")
+        
+        print("-"*50)
         print(f"キャッシュヒット率: {report['cache_hit_rate']*100:.1f}%")
         print(f"キャッシュヒット数: {report['cache_hits']}")
         print(f"キャッシュミス数: {report['cache_misses']}")
+        
+        # ボトルネック警告
+        if report['avg_detection_time'] > 0.2:
+            print("\n⚠️  警告: 検出処理が遅い（>200ms）")
+        if report['avg_ocr_time'] > 0.3:
+            print("⚠️  警告: OCR処理が遅い（>300ms）")
+        if report['cache_hit_rate'] < 0.5:
+            print("⚠️  警告: キャッシュヒット率が低い（<50%）")
+        
         print("="*50 + "\n")

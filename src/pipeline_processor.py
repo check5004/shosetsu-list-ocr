@@ -62,9 +62,21 @@ class PipelineProcessor:
         self.data_manager: Optional[DataManager] = None
         self.visualizer: Optional[Visualizer] = None
         
-        # Caches
-        self.detection_cache = DetectionCache() if self.mode.detection_cache_enabled else None
-        self.ocr_cache = OCRCache() if self.mode.ocr_cache_enabled else None
+        # Caches（設定から値を取得）
+        if self.mode.detection_cache_enabled:
+            self.detection_cache = DetectionCache(
+                ttl=config.detection_cache_ttl,
+                similarity_threshold=config.detection_cache_similarity
+            )
+        else:
+            self.detection_cache = None
+        
+        if self.mode.ocr_cache_enabled:
+            self.ocr_cache = OCRCache(
+                position_tolerance=config.ocr_cache_position_tolerance
+            )
+        else:
+            self.ocr_cache = None
         
         # Performance monitoring
         self.performance_monitor = PerformanceMonitor()

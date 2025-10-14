@@ -35,17 +35,19 @@ class OCRCache:
     OCR処理の実行回数を削減します。
     """
     
-    def __init__(self, position_tolerance: int = 10, ttl: float = 2.0):
+    def __init__(self, position_tolerance: int = 12, ttl: float = 2.0, max_cache_size: int = 100):
         """
         OCRCacheを初期化
         
         Args:
-            position_tolerance: 座標の許容誤差（ピクセル）。デフォルトは10ピクセル
+            position_tolerance: 座標の許容誤差（ピクセル）。デフォルトは12ピクセル
             ttl: キャッシュの有効期限（秒）。デフォルトは2.0秒
+            max_cache_size: 最大キャッシュサイズ。デフォルトは100エントリ
         """
         self.cache: Dict[str, CachedOCRResult] = {}
         self.position_tolerance = position_tolerance
         self.ttl = ttl
+        self.max_cache_size = max_cache_size
         self._cache_hits = 0
         self._cache_misses = 0
     
@@ -86,6 +88,12 @@ class OCRCache:
             bbox: 検出結果（バウンディングボックス情報）
             text: OCRで抽出されたテキスト
         """
+        # キャッシュサイズ制限チェック
+        if len(self.cache) >= self.max_cache_size:
+            # 最も古いエントリを削除（LRU的な動作）
+            oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k].timestamp)
+            del self.cache[oldest_key]
+        
         cache_key = self._get_cache_key(bbox)
         
         self.cache[cache_key] = CachedOCRResult(

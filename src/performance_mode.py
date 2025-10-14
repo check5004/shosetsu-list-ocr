@@ -45,24 +45,24 @@ PERFORMANCE_MODES: Dict[str, PerformanceMode] = {
         frame_skip=2,  # 2フレームに1回処理
         detection_cache_enabled=True,
         ocr_cache_enabled=True,
-        ocr_workers=4,
-        max_detections_per_frame=5
+        ocr_workers=6,  # 並列度向上
+        max_detections_per_frame=8  # 検出数を増やす（5→8）
     ),
     "balanced": PerformanceMode(
         name="バランス",
         frame_skip=1,  # 全フレーム処理
         detection_cache_enabled=True,
         ocr_cache_enabled=True,
-        ocr_workers=3,
-        max_detections_per_frame=10
+        ocr_workers=4,  # 並列度向上
+        max_detections_per_frame=12  # 検出数を増やす（8→12）
     ),
     "accurate": PerformanceMode(
         name="高精度",
         frame_skip=1,  # 全フレーム処理
         detection_cache_enabled=False,
         ocr_cache_enabled=False,
-        ocr_workers=2,
-        max_detections_per_frame=20
+        ocr_workers=3,  # 並列度向上
+        max_detections_per_frame=20  # 検出数を増やす（15→20）
     )
 }
 

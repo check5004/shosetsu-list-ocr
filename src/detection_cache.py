@@ -37,14 +37,14 @@ class DetectionCache:
     物体検出の実行回数を削減します。
     """
     
-    def __init__(self, ttl: float = 0.5, similarity_threshold: float = 0.95):
+    def __init__(self, ttl: float = 0.7, similarity_threshold: float = 0.93):
         """
         DetectionCacheを初期化
         
         Args:
-            ttl: キャッシュの有効期限（秒）。デフォルトは0.5秒
+            ttl: キャッシュの有効期限（秒）。デフォルトは0.7秒
             similarity_threshold: フレーム類似度のしきい値（0.0-1.0）。
-                                 デフォルトは0.95（95%類似）
+                                 デフォルトは0.93（93%類似）
         """
         self.cache: Optional[CacheEntry] = None
         self.ttl = ttl
@@ -189,6 +189,21 @@ class DetectionCache:
         Returns:
             類似度（0.0-1.0）
         """
-        # 単純な一致判定
-        # より高度な実装では、ハミング距離を使用することも可能
-        return 1.0 if hash1 == hash2 else 0.0
+        # 完全一致の場合
+        if hash1 == hash2:
+            return 1.0
+        
+        # ハッシュ値が異なる場合でも、ビット表現のハミング距離で類似度を計算
+        # これにより、わずかな変化があるフレームでもキャッシュヒットしやすくなる
+        try:
+            # XORでビットの差分を取得
+            xor = hash1 ^ hash2
+            # 1のビット数をカウント（ハミング距離）
+            hamming_distance = bin(xor).count('1')
+            # 64ビット整数と仮定して類似度を計算
+            max_bits = 64
+            similarity = 1.0 - (hamming_distance / max_bits)
+            return max(0.0, similarity)
+        except Exception:
+            # エラー時は保守的に0.0を返す
+            return 0.0

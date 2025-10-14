@@ -20,16 +20,18 @@ class OCRProcessor:
     前処理とクリーンアップを行います。
     """
     
-    def __init__(self, lang: str = 'jpn', margin: int = 5):
+    def __init__(self, lang: str = 'jpn', margin: int = 5, min_bbox_size: int = 20):
         """
         OCRProcessorを初期化
         
         Args:
             lang: OCR言語コード（デフォルト: 'jpn'）
             margin: 切り出し時のマージン（ピクセル、デフォルト: 5）
+            min_bbox_size: 最小バウンディングボックスサイズ（ピクセル、デフォルト: 20）
         """
         self.lang = lang
         self.margin = margin
+        self.min_bbox_size = min_bbox_size
         
         # Tesseractの動作確認
         try:
@@ -53,6 +55,13 @@ class OCRProcessor:
             OCR失敗時は空文字列を返す
         """
         try:
+            # バウンディングボックスのサイズチェック（小さすぎる領域はスキップ）
+            bbox_width = bbox.x2 - bbox.x1
+            bbox_height = bbox.y2 - bbox.y1
+            
+            if bbox_width < self.min_bbox_size or bbox_height < self.min_bbox_size:
+                return ""
+            
             # 画像の高さと幅を取得
             height, width = frame.shape[:2]
             
@@ -69,11 +78,13 @@ class OCRProcessor:
             if cropped_image.size == 0:
                 return ""
             
-            # OCR実行
+            # OCR実行（最適化設定）
+            # --psm 6: 単一の均一なテキストブロックを想定
+            # --oem 3: デフォルトのOCRエンジンモード（LSTM）
             text = pytesseract.image_to_string(
                 cropped_image,
                 lang=self.lang,
-                config='--psm 6'  # Assume a single uniform block of text
+                config='--psm 6 --oem 3'
             )
             
             # テキストをクリーンアップ

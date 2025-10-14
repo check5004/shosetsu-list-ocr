@@ -22,6 +22,60 @@ from src.pipeline_processor import PipelineProcessor
 from src.performance_mode import get_available_modes
 
 
+class ToolTip:
+    """ツールチップを表示するクラス"""
+    
+    def __init__(self, widget, text):
+        """
+        ツールチップを初期化
+        
+        Args:
+            widget: ツールチップを表示するウィジェット
+            text: 表示するテキスト
+        """
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        
+        # マウスイベントをバインド
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+    
+    def show_tooltip(self, event=None):
+        """ツールチップを表示"""
+        if self.tooltip_window or not self.text:
+            return
+        
+        # ウィジェットの位置を取得
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        
+        # トップレベルウィンドウを作成
+        self.tooltip_window = tk.Toplevel(self.widget)
+        self.tooltip_window.wm_overrideredirect(True)
+        self.tooltip_window.wm_geometry(f"+{x}+{y}")
+        
+        # ラベルを作成（ダークテーマ対応）
+        label = tk.Label(
+            self.tooltip_window,
+            text=self.text,
+            justify=tk.LEFT,
+            background="#2b2b2b",  # ダークグレー背景
+            foreground="#e0e0e0",  # 明るいグレー文字
+            relief=tk.SOLID,
+            borderwidth=1,
+            font=("TkDefaultFont", 9),
+            wraplength=300
+        )
+        label.pack()
+    
+    def hide_tooltip(self, event=None):
+        """ツールチップを非表示"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+
+
 class RealtimeOCRGUI:
     """Tkinter-based GUI for the real-time OCR application."""
     
@@ -185,17 +239,59 @@ class RealtimeOCRGUI:
         ttk.Button(window_frame, text="🔄", command=self._refresh_windows, width=3).grid(row=0, column=1, padx=(5, 0))
         
         # Confidence
-        ttk.Label(config_group, text="信頼度:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        confidence_label_frame = ttk.Frame(config_group)
+        confidence_label_frame.grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(confidence_label_frame, text="信頼度:").pack(side=tk.LEFT)
+        confidence_hint = ttk.Label(confidence_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        confidence_hint.pack(side=tk.LEFT)
+        ToolTip(confidence_hint, 
+                "物体検出の信頼度しきい値です。\n"
+                "高い値: 検出数が減り、FPSが向上しますが、見逃しが増えます\n"
+                "低い値: 検出数が増えますが、FPSが低下します\n"
+                "推奨: 0.6〜0.7")
+        
         self.confidence_var = tk.DoubleVar(value=self.config.confidence_threshold)
-        ttk.Scale(config_group, from_=0.0, to=1.0, variable=self.confidence_var, orient=tk.HORIZONTAL).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        confidence_scale_frame = ttk.Frame(config_group)
+        confidence_scale_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(confidence_scale_frame, from_=0.0, to=1.0, variable=self.confidence_var, 
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(confidence_scale_frame, textvariable=self.confidence_var, 
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
         
         # OCR language
-        ttk.Label(config_group, text="OCR言語:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ocr_lang_label_frame = ttk.Frame(config_group)
+        ocr_lang_label_frame.grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(ocr_lang_label_frame, text="OCR言語:").pack(side=tk.LEFT)
+        ocr_lang_hint = ttk.Label(ocr_lang_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        ocr_lang_hint.pack(side=tk.LEFT)
+        ToolTip(ocr_lang_hint,
+                "OCRで認識する言語を選択します。\n"
+                "jpn: 日本語のみ（高速）\n"
+                "eng: 英語のみ\n"
+                "jpn+eng: 日本語と英語（やや低速）")
+        
         self.ocr_lang_var = tk.StringVar(value=self.config.ocr_lang)
-        ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], state='readonly', width=27).grid(row=2, column=1, pady=5, padx=5)
+        ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], 
+                    state='readonly', width=27).grid(row=2, column=1, pady=5, padx=5)
         
         # Performance mode
-        ttk.Label(config_group, text="パフォーマンスモード:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        perf_mode_label_frame = ttk.Frame(config_group)
+        perf_mode_label_frame.grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(perf_mode_label_frame, text="パフォーマンスモード:").pack(side=tk.LEFT)
+        perf_mode_hint = ttk.Label(perf_mode_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        perf_mode_hint.pack(side=tk.LEFT)
+        ToolTip(perf_mode_hint,
+                "処理速度と精度のバランスを選択します。\n\n"
+                "高速: FPS優先（10-15 FPS目標）\n"
+                "  - フレームスキップ有効\n"
+                "  - キャッシュを積極活用\n\n"
+                "バランス: 標準設定（5-10 FPS目標）\n"
+                "  - 全フレーム処理\n"
+                "  - キャッシュ有効\n\n"
+                "高精度: 精度優先（3-5 FPS目標）\n"
+                "  - キャッシュ無効\n"
+                "  - 毎回検出とOCR実行")
+        
         self.performance_mode_var = tk.StringVar(value="balanced")
         available_modes = get_available_modes()
         mode_display_values = [f"{key} ({name})" for key, name in available_modes.items()]
@@ -216,6 +312,93 @@ class RealtimeOCRGUI:
         self.performance_mode_combo.bind('<<ComboboxSelected>>', self._on_performance_mode_changed)
         
         config_group.columnconfigure(1, weight=1)
+        
+        # Advanced settings section (collapsible)
+        advanced_group = ttk.LabelFrame(parent, text="詳細設定（パフォーマンスチューニング）", padding="10")
+        advanced_group.pack(fill=tk.X, pady=(0, 10))
+        
+        # Detection cache TTL
+        detection_ttl_label_frame = ttk.Frame(advanced_group)
+        detection_ttl_label_frame.grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(detection_ttl_label_frame, text="検出キャッシュTTL (秒):").pack(side=tk.LEFT)
+        detection_ttl_hint = ttk.Label(detection_ttl_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        detection_ttl_hint.pack(side=tk.LEFT)
+        ToolTip(detection_ttl_hint,
+                "検出結果をキャッシュする有効期限です。\n\n"
+                "長い値（1.0秒以上）:\n"
+                "  ✓ キャッシュヒット率が上がりFPS向上\n"
+                "  ✗ 新規項目の検出が遅れる\n\n"
+                "短い値（0.5秒以下）:\n"
+                "  ✓ 新規項目を素早く検出\n"
+                "  ✗ キャッシュヒット率が下がりFPS低下\n\n"
+                "推奨: 0.5〜1.0秒")
+        
+        self.detection_cache_ttl_var = tk.DoubleVar(value=self.config.detection_cache_ttl)
+        detection_ttl_frame = ttk.Frame(advanced_group)
+        detection_ttl_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(detection_ttl_frame, from_=0.3, to=2.0, variable=self.detection_cache_ttl_var, 
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(detection_ttl_frame, textvariable=self.detection_cache_ttl_var, 
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Detection cache similarity
+        detection_sim_label_frame = ttk.Frame(advanced_group)
+        detection_sim_label_frame.grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(detection_sim_label_frame, text="フレーム類似度:").pack(side=tk.LEFT)
+        detection_sim_hint = ttk.Label(detection_sim_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        detection_sim_hint.pack(side=tk.LEFT)
+        ToolTip(detection_sim_hint,
+                "フレームが類似していると判定するしきい値です。\n\n"
+                "高い値（0.95以上）:\n"
+                "  ✓ より確実に変化を検出\n"
+                "  ✗ キャッシュヒット率が下がる\n\n"
+                "低い値（0.90以下）:\n"
+                "  ✓ キャッシュヒット率が上がりFPS向上\n"
+                "  ✗ 変化を見逃す可能性\n\n"
+                "推奨: 0.90〜0.95")
+        
+        self.detection_similarity_var = tk.DoubleVar(value=self.config.detection_cache_similarity)
+        detection_sim_frame = ttk.Frame(advanced_group)
+        detection_sim_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(detection_sim_frame, from_=0.85, to=0.98, variable=self.detection_similarity_var,
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(detection_sim_frame, textvariable=self.detection_similarity_var,
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # OCR cache position tolerance
+        ocr_pos_label_frame = ttk.Frame(advanced_group)
+        ocr_pos_label_frame.grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(ocr_pos_label_frame, text="OCR位置許容範囲 (px):").pack(side=tk.LEFT)
+        ocr_pos_hint = ttk.Label(ocr_pos_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        ocr_pos_hint.pack(side=tk.LEFT)
+        ToolTip(ocr_pos_hint,
+                "OCR結果をキャッシュする際の位置の許容誤差です。\n\n"
+                "大きい値（15px以上）:\n"
+                "  ✓ OCRキャッシュヒット率が上がる\n"
+                "  ✗ 異なる項目を同一と誤認する可能性\n\n"
+                "小さい値（10px以下）:\n"
+                "  ✓ より正確にキャッシュ判定\n"
+                "  ✗ キャッシュヒット率が下がる\n\n"
+                "推奨: 10〜15ピクセル")
+        
+        self.ocr_position_tolerance_var = tk.IntVar(value=self.config.ocr_cache_position_tolerance)
+        ocr_pos_frame = ttk.Frame(advanced_group)
+        ocr_pos_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(ocr_pos_frame, from_=5, to=25, variable=self.ocr_position_tolerance_var,
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(ocr_pos_frame, textvariable=self.ocr_position_tolerance_var,
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Apply button
+        ttk.Button(advanced_group, text="設定を適用", command=self._apply_advanced_settings).grid(
+            row=3, column=0, columnspan=2, pady=(10, 0))
+        
+        # Help text
+        help_text = ttk.Label(advanced_group, text="※ 設定変更後、処理を再起動すると反映されます", 
+                             font=('TkDefaultFont', 8), foreground='gray')
+        help_text.grid(row=4, column=0, columnspan=2, pady=(5, 0))
+        
+        advanced_group.columnconfigure(1, weight=1)
         
         # Control section
         control_group = ttk.LabelFrame(parent, text="制御", padding="10")
@@ -267,7 +450,7 @@ class RealtimeOCRGUI:
         
         self.fps_var = tk.StringVar(value="0.0")
         ttk.Label(stats_group, text="FPS:").grid(row=3, column=0, sticky=tk.W, pady=2)
-        ttk.Label(stats_group, textvariable=self.fps_var, foreground='blue').grid(row=3, column=1, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.fps_var, foreground='cyan').grid(row=3, column=1, sticky=tk.W, pady=2)
         
         # Performance metrics
         ttk.Separator(stats_group, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
@@ -327,7 +510,7 @@ class RealtimeOCRGUI:
         self.log_text.tag_config('new', foreground='green')
         self.log_text.tag_config('duplicate', foreground='orange')
         self.log_text.tag_config('error', foreground='red')
-        self.log_text.tag_config('info', foreground='blue')
+        self.log_text.tag_config('info', foreground='cyan')
     
     def _select_window_and_preview(self):
         """Select window and start preview."""
@@ -425,6 +608,40 @@ class RealtimeOCRGUI:
         elif current_state == "paused":
             self._set_state("processing")
     
+    def _apply_advanced_settings(self):
+        """詳細設定を適用"""
+        try:
+            # 設定を更新
+            self.config.detection_cache_ttl = round(self.detection_cache_ttl_var.get(), 2)
+            self.config.detection_cache_similarity = round(self.detection_similarity_var.get(), 2)
+            self.config.ocr_cache_position_tolerance = int(self.ocr_position_tolerance_var.get())
+            
+            # 処理中の場合は再起動を促す
+            current_state = self._get_current_state()
+            if current_state in ["processing", "paused"]:
+                if messagebox.askyesno(
+                    "設定適用",
+                    "設定を反映するには処理を再起動する必要があります。今すぐ再起動しますか？"
+                ):
+                    # 処理を停止して再起動
+                    self._stop_processing()
+                    self.root.after(500, self._start_processing)
+                else:
+                    messagebox.showinfo("設定適用", "設定は保存されました。次回の処理開始時に反映されます。")
+            else:
+                messagebox.showinfo("設定適用", "設定が保存されました。")
+            
+            # ログに記録
+            self.log_queue.put((
+                f"詳細設定を更新: TTL={self.config.detection_cache_ttl}s, "
+                f"類似度={self.config.detection_cache_similarity}, "
+                f"位置許容={self.config.ocr_cache_position_tolerance}px",
+                'info'
+            ))
+            
+        except Exception as e:
+            messagebox.showerror("エラー", f"設定の適用に失敗しました: {str(e)}")
+    
     def _start_preview(self):
         """Start preview loop (capture only)."""
         self.preview_stop_event.clear()
@@ -493,6 +710,11 @@ class RealtimeOCRGUI:
         self.config.confidence_threshold = self.confidence_var.get()
         self.config.ocr_lang = self.ocr_lang_var.get()
         self.config.target_window_title = self.window_title_var.get()
+        
+        # 詳細設定を反映
+        self.config.detection_cache_ttl = round(self.detection_cache_ttl_var.get(), 2)
+        self.config.detection_cache_similarity = round(self.detection_similarity_var.get(), 2)
+        self.config.ocr_cache_position_tolerance = int(self.ocr_position_tolerance_var.get())
         
         try:
             # PipelineProcessorを初期化
