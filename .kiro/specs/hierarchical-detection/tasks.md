@@ -148,8 +148,8 @@
   - 曖昧マッチングのテストケースを実装
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 12.4_
 
-- [ ] 8. OCR 統合機能の実装
-- [ ] 8.1 階層的検出結果に対する OCR 処理を実装
+- [x] 8. OCR 統合機能の実装
+- [x] 8.1 階層的検出結果に対する OCR 処理を実装
 
   - src/hierarchical_ocr_processor.py を作成
   - process_hierarchical_detection()関数を実装
