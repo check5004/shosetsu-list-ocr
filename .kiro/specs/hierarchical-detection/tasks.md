@@ -65,22 +65,22 @@
   - 親子関係構築ロジックのテストケースを実装
   - _Requirements: 2.3, 2.4, 2.5, 2.6, 2.7, 12.5_
 
-- [ ] 5. SessionManager モジュールの実装
-- [ ] 5.1 SessionManager クラスの基本構造を作成
+- [x] 5. SessionManager モジュールの実装
+- [x] 5.1 SessionManager クラスの基本構造を作成
 
   - src/session_manager.py を作成
   - SessionManager クラスを定義
   - 初期化メソッドを実装（base_output_dir 設定）
   - _Requirements: 5.1_
 
-- [ ] 5.2 セッション開始機能を実装
+- [x] 5.2 セッション開始機能を実装
 
   - start_session()メソッドを実装
   - タイムスタンプ（YYYYMMDD_HHMMSS）を生成
   - セッション専用フォルダを作成（output/sessions/YYYYMMDD_HHMMSS/）
   - _Requirements: 5.1_
 
-- [ ] 5.3 画像切り出しと保存機能を実装
+- [x] 5.3 画像切り出しと保存機能を実装
 
   - save_list_item_image()メソッドを実装
   - マージン付きで bounding box 領域を切り出し
@@ -89,7 +89,7 @@
   - 相対パスを返す
   - _Requirements: 5.2, 5.3, 5.4, 5.5, 5.9_
 
-- [ ] 5.4 セッション終了と ZIP 圧縮機能を実装
+- [x] 5.4 セッション終了と ZIP 圧縮機能を実装
 
   - end_session()メソッドを実装
   - セッションフォルダを ZIP ファイルに圧縮
@@ -97,7 +97,7 @@
   - エラーハンドリングを実装
   - _Requirements: 5.6, 5.7, 5.9_
 
-- [ ] 5.5 Finder でフォルダを開く機能を実装
+- [x] 5.5 Finder でフォルダを開く機能を実装
 
   - open_session_folder()メソッドを実装
   - macOS の open コマンドを使用して Finder で開く
