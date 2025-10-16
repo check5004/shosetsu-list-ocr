@@ -20,6 +20,9 @@ from src.data_manager import DataManager
 from src.error_handler import ErrorHandler
 from src.pipeline_processor import PipelineProcessor
 from src.performance_mode import get_available_modes
+from src.hierarchical_pipeline import HierarchicalPipeline
+from src.session_manager import SessionManager
+from src.visualizer import Visualizer
 
 
 class ToolTip:
@@ -83,7 +86,7 @@ class RealtimeOCRGUI:
         """Initialize the GUI application."""
         self.root = root
         self.root.title("リアルタイムOCRアプリケーション")
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x1000")
         
         # Application state
         self.config = AppConfig()
@@ -100,6 +103,9 @@ class RealtimeOCRGUI:
         self.ocr_processor: Optional[OCRProcessor] = None
         self.data_manager: Optional[DataManager] = None
         self.pipeline_processor: Optional[PipelineProcessor] = None
+        self.hierarchical_pipeline: Optional[HierarchicalPipeline] = None
+        self.session_manager: Optional[SessionManager] = None
+        self.visualizer: Optional[Visualizer] = None
         
         # Statistics
         self.stats = {
@@ -214,13 +220,37 @@ class RealtimeOCRGUI:
         config_group = ttk.LabelFrame(parent, text="設定", padding="10")
         config_group.pack(fill=tk.X, pady=(0, 10))
         
+        # Model selection
+        model_label_frame = ttk.Frame(config_group)
+        model_label_frame.grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(model_label_frame, text="検出モデル:").pack(side=tk.LEFT)
+        model_hint = ttk.Label(model_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        model_hint.pack(side=tk.LEFT)
+        ToolTip(model_hint,
+                "使用する検出モデルを選択します。\n\n"
+                "既存モデル:\n"
+                "  - list-item全体を1つのラベルとして検出\n"
+                "  - シンプルで高速\n\n"
+                "階層的モデル:\n"
+                "  - list-item内の詳細要素を個別に検出\n"
+                "  - title、progress、last_read_date、site_nameを抽出\n"
+                "  - 構造化されたCSV出力")
+        
+        self.detection_mode_var = tk.StringVar(value="legacy")
+        model_frame = ttk.Frame(config_group)
+        model_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Radiobutton(model_frame, text="既存モデル", variable=self.detection_mode_var, 
+                       value="legacy").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(model_frame, text="階層的モデル", variable=self.detection_mode_var, 
+                       value="hierarchical").pack(side=tk.LEFT, padx=5)
+        
         # Window title
-        ttk.Label(config_group, text="ウィンドウタイトル:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_group, text="ウィンドウタイトル:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.window_title_var = tk.StringVar(value=self.config.target_window_title)
         
         # Create frame for combobox and refresh button
         window_frame = ttk.Frame(config_group)
-        window_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        window_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
         window_frame.columnconfigure(0, weight=1)
         
         # Get available windows
@@ -240,7 +270,7 @@ class RealtimeOCRGUI:
         
         # Confidence
         confidence_label_frame = ttk.Frame(config_group)
-        confidence_label_frame.grid(row=1, column=0, sticky=tk.W, pady=5)
+        confidence_label_frame.grid(row=2, column=0, sticky=tk.W, pady=5)
         ttk.Label(confidence_label_frame, text="信頼度:").pack(side=tk.LEFT)
         confidence_hint = ttk.Label(confidence_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
         confidence_hint.pack(side=tk.LEFT)
@@ -252,7 +282,7 @@ class RealtimeOCRGUI:
         
         self.confidence_var = tk.DoubleVar(value=self.config.confidence_threshold)
         confidence_scale_frame = ttk.Frame(config_group)
-        confidence_scale_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        confidence_scale_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
         ttk.Scale(confidence_scale_frame, from_=0.0, to=1.0, variable=self.confidence_var, 
                  orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Label(confidence_scale_frame, textvariable=self.confidence_var, 
@@ -260,7 +290,7 @@ class RealtimeOCRGUI:
         
         # OCR language
         ocr_lang_label_frame = ttk.Frame(config_group)
-        ocr_lang_label_frame.grid(row=2, column=0, sticky=tk.W, pady=5)
+        ocr_lang_label_frame.grid(row=3, column=0, sticky=tk.W, pady=5)
         ttk.Label(ocr_lang_label_frame, text="OCR言語:").pack(side=tk.LEFT)
         ocr_lang_hint = ttk.Label(ocr_lang_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
         ocr_lang_hint.pack(side=tk.LEFT)
@@ -272,11 +302,11 @@ class RealtimeOCRGUI:
         
         self.ocr_lang_var = tk.StringVar(value=self.config.ocr_lang)
         ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], 
-                    state='readonly', width=27).grid(row=2, column=1, pady=5, padx=5)
+                    state='readonly', width=27).grid(row=3, column=1, pady=5, padx=5)
         
         # Performance mode
         perf_mode_label_frame = ttk.Frame(config_group)
-        perf_mode_label_frame.grid(row=3, column=0, sticky=tk.W, pady=5)
+        perf_mode_label_frame.grid(row=4, column=0, sticky=tk.W, pady=5)
         ttk.Label(perf_mode_label_frame, text="パフォーマンスモード:").pack(side=tk.LEFT)
         perf_mode_hint = ttk.Label(perf_mode_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
         perf_mode_hint.pack(side=tk.LEFT)
@@ -302,7 +332,7 @@ class RealtimeOCRGUI:
             state='readonly',
             width=27
         )
-        self.performance_mode_combo.grid(row=3, column=1, pady=5, padx=5)
+        self.performance_mode_combo.grid(row=4, column=1, pady=5, padx=5)
         
         # Display mode names in combobox
         self.performance_mode_combo['values'] = mode_display_values
@@ -413,7 +443,7 @@ class RealtimeOCRGUI:
         
         # Processing control buttons
         btn_frame = ttk.Frame(control_group)
-        btn_frame.pack(fill=tk.X)
+        btn_frame.pack(fill=tk.X, pady=(0, 5))
         
         self.start_stop_btn = ttk.Button(btn_frame, text="開始", command=self._toggle_start_stop, state=tk.DISABLED)
         self.start_stop_btn.pack(side=tk.LEFT, padx=5)
@@ -422,6 +452,21 @@ class RealtimeOCRGUI:
         self.pause_resume_btn.pack(side=tk.LEFT, padx=5)
         
         ttk.Button(btn_frame, text="CSV出力", command=self._export_csv).pack(side=tk.LEFT, padx=5)
+        
+        # Image folder management (for hierarchical mode)
+        image_folder_frame = ttk.Frame(control_group)
+        image_folder_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        self.open_folder_btn = ttk.Button(image_folder_frame, text="📁 画像フォルダを開く", 
+                                         command=self._open_session_folder, state=tk.DISABLED)
+        self.open_folder_btn.pack(side=tk.LEFT, padx=5)
+        
+        folder_hint = ttk.Label(image_folder_frame, text="ℹ️", foreground="cyan", cursor="hand2")
+        folder_hint.pack(side=tk.LEFT)
+        ToolTip(folder_hint,
+                "階層的検出モードで処理中に切り出された\n"
+                "list-item画像を保存したフォルダを開きます。\n"
+                "※階層的検出モードで処理開始後に有効になります")
         
         # Status
         status_frame = ttk.Frame(control_group)
@@ -451,6 +496,55 @@ class RealtimeOCRGUI:
         self.fps_var = tk.StringVar(value="0.0")
         ttk.Label(stats_group, text="FPS:").grid(row=3, column=0, sticky=tk.W, pady=2)
         ttk.Label(stats_group, textvariable=self.fps_var, foreground='cyan').grid(row=3, column=1, sticky=tk.W, pady=2)
+        
+        # Hierarchical mode specific stats
+        ttk.Separator(stats_group, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        ttk.Label(stats_group, text="階層的検出統計:", font=('TkDefaultFont', 9, 'bold')).grid(
+            row=5, column=0, columnspan=2, sticky=tk.W, pady=(5, 2))
+        
+        self.list_item_count_var = tk.StringVar(value="0")
+        ttk.Label(stats_group, text="  list-item検出数:").grid(row=6, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.list_item_count_var).grid(row=6, column=1, sticky=tk.W, pady=2)
+        
+        self.title_count_var = tk.StringVar(value="0")
+        ttk.Label(stats_group, text="  title検出数:").grid(row=7, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.title_count_var).grid(row=7, column=1, sticky=tk.W, pady=2)
+        
+        self.error_count_var = tk.StringVar(value="0")
+        self.success_count_var = tk.StringVar(value="0")
+        ttk.Label(stats_group, text="  正常レコード:").grid(row=8, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.success_count_var, foreground='green').grid(row=8, column=1, sticky=tk.W, pady=2)
+        
+        ttk.Label(stats_group, text="  エラーレコード:").grid(row=9, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.error_count_var, foreground='red').grid(row=9, column=1, sticky=tk.W, pady=2)
+        
+        # Similarity threshold slider (for hierarchical mode)
+        ttk.Separator(stats_group, orient='horizontal').grid(row=10, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        similarity_label_frame = ttk.Frame(stats_group)
+        similarity_label_frame.grid(row=11, column=0, columnspan=2, sticky=tk.W, pady=2)
+        ttk.Label(similarity_label_frame, text="類似度しきい値:").pack(side=tk.LEFT)
+        similarity_hint = ttk.Label(similarity_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        similarity_hint.pack(side=tk.LEFT)
+        ToolTip(similarity_hint,
+                "階層的検出モードでの重複判定に使用する\n"
+                "文字列類似度のしきい値です。\n\n"
+                "高い値（0.8以上）:\n"
+                "  ✓ より確実に重複を検出\n"
+                "  ✗ 類似した別作品を重複と誤認する可能性\n\n"
+                "低い値（0.7以下）:\n"
+                "  ✓ 別作品を正しく区別\n"
+                "  ✗ OCR誤認識による重複を見逃す可能性\n\n"
+                "推奨: 0.75〜0.80")
+        
+        self.similarity_threshold_var = tk.DoubleVar(value=self.config.similarity_threshold)
+        similarity_frame = ttk.Frame(stats_group)
+        similarity_frame.grid(row=12, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=2)
+        ttk.Scale(similarity_frame, from_=0.6, to=0.9, variable=self.similarity_threshold_var,
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(similarity_frame, textvariable=self.similarity_threshold_var,
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
         
         # Performance metrics
         ttk.Separator(stats_group, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
@@ -716,30 +810,22 @@ class RealtimeOCRGUI:
         self.config.detection_cache_similarity = round(self.detection_similarity_var.get(), 2)
         self.config.ocr_cache_position_tolerance = int(self.ocr_position_tolerance_var.get())
         
+        # 検出モードを取得
+        detection_mode = self.detection_mode_var.get()
+        
         try:
-            # PipelineProcessorを初期化
-            self.pipeline_processor = PipelineProcessor(
-                config=self.config,
-                performance_mode=mode_key,
-                on_new_text_callback=self._on_new_text_detected
-            )
-            
-            # パイプライン処理を開始
-            self.pipeline_processor.start()
-            
-            # データマネージャーへの参照を保持
-            self.data_manager = self.pipeline_processor.data_manager
+            if detection_mode == "hierarchical":
+                # 階層的検出モードの場合
+                self._start_hierarchical_processing()
+            else:
+                # 既存モード（legacy）の場合
+                self._start_legacy_processing(mode_key)
             
         except Exception as e:
             self.log_queue.put((f"初期化エラー: {str(e)}", 'error'))
             messagebox.showerror("初期化エラー", str(e))
             # クリーンアップ
-            if self.pipeline_processor:
-                try:
-                    self.pipeline_processor.stop()
-                except Exception:
-                    pass
-                self.pipeline_processor = None
+            self._cleanup_processing_components()
             return
         
         self.stats['start_time'] = datetime.now()
@@ -756,10 +842,76 @@ class RealtimeOCRGUI:
         
         self._set_state("processing")
     
+    def _start_legacy_processing(self, mode_key: str):
+        """既存モード（legacy）で処理を開始
+        
+        Args:
+            mode_key: パフォーマンスモードキー
+        """
+        # PipelineProcessorを初期化
+        self.pipeline_processor = PipelineProcessor(
+            config=self.config,
+            performance_mode=mode_key,
+            on_new_text_callback=self._on_new_text_detected
+        )
+        
+        # パイプライン処理を開始
+        self.pipeline_processor.start()
+        
+        # データマネージャーへの参照を保持
+        self.data_manager = self.pipeline_processor.data_manager
+        
+        self.log_queue.put(("既存モードで処理を開始しました", 'info'))
+    
+    def _start_hierarchical_processing(self):
+        """階層的検出モードで処理を開始"""
+        # 類似度しきい値を設定に反映
+        self.config.similarity_threshold = round(self.similarity_threshold_var.get(), 2)
+        
+        # HierarchicalPipelineを初期化
+        self.hierarchical_pipeline = HierarchicalPipeline(config=self.config)
+        
+        # パイプライン処理を開始
+        self.hierarchical_pipeline.start()
+        
+        # データマネージャーへの参照を保持（階層的データマネージャー）
+        self.data_manager = self.hierarchical_pipeline.data_manager
+        
+        # セッションマネージャーへの参照を保持
+        self.session_manager = self.hierarchical_pipeline.session_manager
+        
+        # Visualizerを初期化（階層的検出結果の描画用）
+        if not self.visualizer:
+            self.visualizer = Visualizer()
+        
+        # 画像フォルダを開くボタンを有効化
+        self.open_folder_btn.config(state=tk.NORMAL)
+        
+        self.log_queue.put((f"階層的検出モードで処理を開始しました（類似度しきい値: {self.config.similarity_threshold}）", 'info'))
+    
+    def _cleanup_processing_components(self):
+        """処理コンポーネントをクリーンアップ"""
+        if self.pipeline_processor:
+            try:
+                self.pipeline_processor.stop()
+            except Exception:
+                pass
+            self.pipeline_processor = None
+        
+        if self.hierarchical_pipeline:
+            try:
+                self.hierarchical_pipeline.stop()
+            except Exception:
+                pass
+            self.hierarchical_pipeline = None
+        
+        self.data_manager = None
+        self.session_manager = None
+    
     def _stop_processing(self):
         """Stop processing (but keep preview running)."""
         try:
-            # パイプラインプロセッサを停止
+            # パイプラインプロセッサを停止（既存モード）
             if self.pipeline_processor:
                 try:
                     self.pipeline_processor.stop()
@@ -767,6 +919,16 @@ class RealtimeOCRGUI:
                     self.log_queue.put((f"パイプライン停止エラー: {str(e)}", 'error'))
                 finally:
                     self.pipeline_processor = None
+            
+            # 階層的パイプラインを停止
+            if self.hierarchical_pipeline:
+                try:
+                    self.hierarchical_pipeline.stop()
+                except Exception as e:
+                    self.log_queue.put((f"階層的パイプライン停止エラー: {str(e)}", 'error'))
+                finally:
+                    self.hierarchical_pipeline = None
+                    # 画像フォルダを開くボタンは有効のまま（停止後もフォルダは開ける）
             
             # 表示スレッドを停止
             self.processing_stop_event.set()
@@ -785,9 +947,24 @@ class RealtimeOCRGUI:
         if self.data_manager:
             try:
                 self.data_manager.export_to_csv()
-                messagebox.showinfo("成功", f"CSVに出力しました: {self.config.output_csv}")
+                # 出力パスを取得（既存モードと階層的モードで異なる）
+                if self.hierarchical_pipeline:
+                    output_path = self.config.hierarchical_csv_output
+                else:
+                    output_path = self.config.output_csv
+                messagebox.showinfo("成功", f"CSVに出力しました: {output_path}")
             except Exception as e:
                 messagebox.showerror("エラー", str(e))
+    
+    def _open_session_folder(self):
+        """セッションフォルダをFinderで開く"""
+        if self.session_manager:
+            try:
+                self.session_manager.open_session_folder()
+            except Exception as e:
+                messagebox.showerror("エラー", f"フォルダを開けませんでした: {str(e)}")
+        else:
+            messagebox.showwarning("警告", "階層的検出モードで処理を開始してください")
     
     def _on_new_text_detected(self, text: str):
         """新規テキスト検出時のコールバック
@@ -810,16 +987,15 @@ class RealtimeOCRGUI:
                         self.processing_stop_event.wait(0.1)
                         continue
                     
-                    if self.pipeline_processor is None:
+                    # 階層的モードか既存モードかを判定
+                    if self.hierarchical_pipeline:
+                        # 階層的モードの場合
+                        frame = self._process_hierarchical_frame()
+                    elif self.pipeline_processor:
+                        # 既存モードの場合
+                        frame = self._process_legacy_frame()
+                    else:
                         break
-                    
-                    # パイプラインが実行中かチェック
-                    if not self.pipeline_processor.is_running():
-                        self.log_queue.put(("パイプラインが停止しました", 'warning'))
-                        break
-                    
-                    # 表示キューから最新フレームを取得
-                    frame = self.pipeline_processor.get_display_frame(timeout=0.1)
                     
                     if frame is not None:
                         # フレームを表示キューに送信
@@ -840,7 +1016,11 @@ class RealtimeOCRGUI:
                     # データマネージャーから新規検出数を取得
                     if self.data_manager:
                         try:
-                            current_count = self.data_manager.get_count()
+                            if hasattr(self.data_manager, 'get_count'):
+                                current_count = self.data_manager.get_count()
+                            else:
+                                # 階層的データマネージャーの場合
+                                current_count = len(self.data_manager.records)
                             self.stats['new_detections'] = current_count
                         except Exception as dm_error:
                             self.log_queue.put((f"データマネージャーエラー: {str(dm_error)}", 'warning'))
@@ -860,11 +1040,56 @@ class RealtimeOCRGUI:
         
         finally:
             # クリーンアップ
-            if self.pipeline_processor:
-                try:
-                    self.pipeline_processor.stop()
-                except Exception:
-                    pass
+            self._cleanup_processing_components()
+    
+    def _process_legacy_frame(self):
+        """既存モードでフレームを処理
+        
+        Returns:
+            処理済みフレーム（表示用）
+        """
+        if not self.pipeline_processor.is_running():
+            self.log_queue.put(("パイプラインが停止しました", 'warning'))
+            return None
+        
+        # 表示キューから最新フレームを取得
+        frame = self.pipeline_processor.get_display_frame(timeout=0.1)
+        return frame
+    
+    def _process_hierarchical_frame(self):
+        """階層的モードでフレームを処理
+        
+        Returns:
+            処理済みフレーム（表示用）
+        """
+        if not self.window_capture:
+            return None
+        
+        # フレームをキャプチャ
+        frame = self.window_capture.capture_frame()
+        
+        if frame is None:
+            return None
+        
+        # 階層的検出を実行（描画用に結果を取得）
+        try:
+            hierarchical_results = self.hierarchical_pipeline.detector.detect(frame)
+            
+            # パイプライン処理を実行（データ保存など）
+            # 注: process_frameは内部でdetectを再度呼び出すが、
+            # ここでは表示用に結果を先に取得している
+            self.hierarchical_pipeline.process_frame(frame)
+            
+            # 検出結果を描画（表示用のフレームを作成）
+            display_frame = frame
+            if hierarchical_results and self.visualizer:
+                display_frame = self.visualizer.draw_hierarchical_detections(frame, hierarchical_results)
+            
+            return display_frame
+            
+        except Exception as e:
+            self.log_queue.put((f"階層的処理エラー: {str(e)}", 'error'))
+            return frame
     
     def _process_queues(self):
         """Process queues.
@@ -925,9 +1150,41 @@ class RealtimeOCRGUI:
     def _update_stats(self):
         """Update statistics."""
         if self.data_manager:
-            self.unique_count_var.set(str(self.data_manager.get_count()))
+            if hasattr(self.data_manager, 'get_count'):
+                # 既存モードのデータマネージャー
+                self.unique_count_var.set(str(self.data_manager.get_count()))
+            else:
+                # 階層的データマネージャー
+                self.unique_count_var.set(str(len(self.data_manager.records)))
+        
         self.frames_var.set(str(self.stats['frames_processed']))
         self.new_detections_var.set(str(self.stats['new_detections']))
+        
+        # 階層的検出モードの統計情報を更新
+        if self.hierarchical_pipeline:
+            try:
+                stats = self.hierarchical_pipeline.get_statistics()
+                
+                # list-item検出数（総レコード数）
+                self.list_item_count_var.set(str(stats.get('total_records', 0)))
+                
+                # title検出数（エラーでないレコード数）
+                success_count = stats.get('total_records', 0) - stats.get('error_records', 0)
+                self.title_count_var.set(str(success_count))
+                
+                # 正常レコード数とエラーレコード数
+                self.success_count_var.set(str(success_count))
+                self.error_count_var.set(str(stats.get('error_records', 0)))
+                
+            except Exception as e:
+                # エラーが発生した場合はデフォルト値を使用
+                pass
+        else:
+            # 階層的モードでない場合は0を表示
+            self.list_item_count_var.set("0")
+            self.title_count_var.set("0")
+            self.success_count_var.set("0")
+            self.error_count_var.set("0")
         
         # パイプラインプロセッサからパフォーマンスメトリクスを取得
         if self.pipeline_processor:
