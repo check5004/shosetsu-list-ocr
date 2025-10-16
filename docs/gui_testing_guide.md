@@ -260,7 +260,7 @@ python src/gui_app.py
 **解決策:**
 ```bash
 # モデルを学習
-python train_hierarchical_model.py
+python scripts/train_hierarchical_model.py
 ```
 
 ### 問題: 画像フォルダを開くボタンが無効

@@ -55,13 +55,13 @@ names:
 source venv/bin/activate
 
 # 学習スクリプトを実行
-python train_hierarchical_model.py
+python scripts/train_hierarchical_model.py
 ```
 
 または、仮想環境をアクティベートせずに直接実行：
 
 ```bash
-./venv/bin/python train_hierarchical_model.py
+./venv/bin/python scripts/train_hierarchical_model.py
 ```
 
 ### 学習設定
@@ -168,7 +168,7 @@ path: temp/shosetsu-list-item_dataset_v2  # ✅ 正しい
 
 **原因**: MixupまたはCopy-Paste拡張とYOLOv8の互換性問題
 
-**解決策**: train_hierarchical_model.pyで`mixup=0.0`と`copy_paste=0.0`に設定（既に対応済み）
+**解決策**: scripts/train_hierarchical_model.pyで`mixup=0.0`と`copy_paste=0.0`に設定（既に対応済み）
 
 ### 学習が遅い
 
@@ -203,7 +203,7 @@ rm -rf models/hierarchical-detection
 rm -f models/hierarchical_best.pt
 
 # 学習を再実行
-./venv/bin/python train_hierarchical_model.py
+./venv/bin/python scripts/train_hierarchical_model.py
 ```
 
 ## 次のステップ

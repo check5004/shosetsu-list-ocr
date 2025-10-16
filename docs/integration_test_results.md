@@ -194,7 +194,7 @@ OCRの誤認識（「殺寺」→「殺二」、「殺雪」）を考慮した�
 
 ## 作成したテストスクリプト
 
-### 1. test_hierarchical_integration.py
+### 1. tests/test_hierarchical_integration.py
 
 階層的検出機能の統合テストスクリプト。
 サンプル画像を使用した全体フローのテスト（タスク14.1）とエラーケースの動作確認（タスク14.2）を実行します。
@@ -202,10 +202,10 @@ OCRの誤認識（「殺寺」→「殺二」、「殺雪」）を考慮した�
 **実行方法:**
 ```bash
 source venv/bin/activate
-python test_hierarchical_integration.py
+python tests/test_hierarchical_integration.py
 ```
 
-### 2. test_gui_hierarchical.py
+### 2. tests/test_gui_hierarchical.py
 
 GUI階層的検出機能の自動テストスクリプト。
 GUIの初期化と設定の検証を行います。
@@ -213,7 +213,7 @@ GUIの初期化と設定の検証を行います。
 **実行方法:**
 ```bash
 source venv/bin/activate
-python test_gui_hierarchical.py
+python tests/test_gui_hierarchical.py
 ```
 
 ### 3. docs/gui_testing_guide.md

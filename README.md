@@ -233,7 +233,7 @@ temp/shosetsu-list-item_dataset_v2/
 source venv/bin/activate
 
 # 学習スクリプトを実行
-python train_hierarchical_model.py
+python scripts/train_hierarchical_model.py
 ```
 
 学習完了後、以下のファイルが生成されます:
@@ -533,8 +533,18 @@ GUIモードでは、リアルタイムでパフォーマンス統計を確認�
 ├── tests/                  # テストコード
 │   ├── test_hierarchical_detector.py
 │   ├── test_hierarchical_data_manager.py
+│   ├── test_hierarchical_integration.py
+│   ├── test_gui_hierarchical.py
 │   └── ...
-├── train_hierarchical_model.py # 階層的モデル学習スクリプト
+├── scripts/                # スクリプト
+│   ├── train_hierarchical_model.py # 階層的モデル学習
+│   ├── train_yolov8.py    # 既存モデル学習
+│   └── debug/             # デバッグスクリプト
+├── docs/                   # ドキュメント
+│   ├── DEVELOPMENT.md     # 開発ガイド
+│   ├── gui_testing_guide.md
+│   ├── integration_test_results.md
+│   └── implementation_notes/ # 実装メモ
 ├── requirements.txt        # Python依存関係
 └── README.md              # このファイル
 ```
@@ -621,7 +631,7 @@ brew install python-tk@3.9  # または使用しているPythonバージョン
 
 ## 学習スクリプトのドキュメント
 
-### train_hierarchical_model.py
+### scripts/train_hierarchical_model.py
 
 階層的検出用の5クラスモデルを学習するスクリプトです。
 
@@ -632,7 +642,7 @@ brew install python-tk@3.9  # または使用しているPythonバージョン
 source venv/bin/activate
 
 # 学習スクリプトを実行
-python train_hierarchical_model.py
+python scripts/train_hierarchical_model.py
 ```
 
 #### データ拡張パラメータ
