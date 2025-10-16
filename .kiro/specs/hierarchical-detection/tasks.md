@@ -16,8 +16,8 @@
   - 学習結果（mAP、precision、recall）を確認
   - _Requirements: 1.3, 1.4, 1.5, 1.6, 1.7, 10.1, 10.3, 10.4, 10.5, 10.6, 10.7_
 
-- [ ] 3. IoU 計算ロジックの実装
-- [ ] 3.1 IoU 計算関数を実装
+- [-] 3. IoU 計算ロジックの実装
+- [x] 3.1 IoU 計算関数を実装
 
   - src/iou_calculator.py を作成
   - calculate_iou()関数を実装（2 つの bounding box 間の IoU 計算）
@@ -30,7 +30,7 @@
   - 完全一致（IoU=1.0）、部分重複、非重複（IoU=0.0）のテストケースを実装
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 12.4_
 
-- [ ] 4. HierarchicalDetector モジュールの実装
+- [-] 4. HierarchicalDetector モジュールの実装
 - [ ] 4.1 データクラスの定義
 
   - src/hierarchical_detector.py を作成
