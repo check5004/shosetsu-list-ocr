@@ -103,7 +103,7 @@
   - macOS の open コマンドを使用して Finder で開く
   - _Requirements: 11.6, 11.7_
 
-- [ ] 6. .gitignore 設定の更新
+- [x] 6. .gitignore 設定の更新
 
   - .gitignore ファイルに output/sessions/ディレクトリを追加
   - ZIP ファイルも除外設定に追加（\*.zip）
