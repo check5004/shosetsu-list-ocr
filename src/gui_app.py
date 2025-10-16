@@ -12,12 +12,68 @@ from datetime import datetime
 import cv2
 from PIL import Image, ImageTk
 
-from config import AppConfig
-from window_capture import WindowCapture
-from object_detector import ObjectDetector
-from ocr_processor import OCRProcessor
-from data_manager import DataManager
-from error_handler import ErrorHandler
+from src.config import AppConfig
+from src.window_capture import WindowCapture
+from src.object_detector import ObjectDetector
+from src.ocr_processor import OCRProcessor
+from src.data_manager import DataManager
+from src.error_handler import ErrorHandler
+from src.pipeline_processor import PipelineProcessor
+from src.performance_mode import get_available_modes
+
+
+class ToolTip:
+    """ツールチップを表示するクラス"""
+    
+    def __init__(self, widget, text):
+        """
+        ツールチップを初期化
+        
+        Args:
+            widget: ツールチップを表示するウィジェット
+            text: 表示するテキスト
+        """
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        
+        # マウスイベントをバインド
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+    
+    def show_tooltip(self, event=None):
+        """ツールチップを表示"""
+        if self.tooltip_window or not self.text:
+            return
+        
+        # ウィジェットの位置を取得
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        
+        # トップレベルウィンドウを作成
+        self.tooltip_window = tk.Toplevel(self.widget)
+        self.tooltip_window.wm_overrideredirect(True)
+        self.tooltip_window.wm_geometry(f"+{x}+{y}")
+        
+        # ラベルを作成（ダークテーマ対応）
+        label = tk.Label(
+            self.tooltip_window,
+            text=self.text,
+            justify=tk.LEFT,
+            background="#2b2b2b",  # ダークグレー背景
+            foreground="#e0e0e0",  # 明るいグレー文字
+            relief=tk.SOLID,
+            borderwidth=1,
+            font=("TkDefaultFont", 9),
+            wraplength=300
+        )
+        label.pack()
+    
+    def hide_tooltip(self, event=None):
+        """ツールチップを非表示"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
 
 
 class RealtimeOCRGUI:
@@ -43,6 +99,7 @@ class RealtimeOCRGUI:
         self.object_detector: Optional[ObjectDetector] = None
         self.ocr_processor: Optional[OCRProcessor] = None
         self.data_manager: Optional[DataManager] = None
+        self.pipeline_processor: Optional[PipelineProcessor] = None
         
         # Statistics
         self.stats = {
@@ -128,6 +185,29 @@ class RealtimeOCRGUI:
         if self.window_title_var.get() not in self.available_windows and self.available_windows:
             self.window_title_var.set(self.available_windows[0])
     
+    def _on_performance_mode_changed(self, event=None):
+        """パフォーマンスモード変更時のハンドラ"""
+        # Get selected mode key from display value
+        selected_display = self.performance_mode_combo.get()
+        # Extract key from "key (name)" format
+        mode_key = selected_display.split(' (')[0]
+        
+        # If processing is active, restart with new mode
+        current_state = self._get_current_state()
+        if current_state in ["processing", "paused"]:
+            # Show confirmation dialog
+            if messagebox.askyesno(
+                "モード変更",
+                "パフォーマンスモードを変更すると処理が再起動されます。続行しますか？"
+            ):
+                self._stop_processing()
+                # Wait a bit for cleanup
+                self.root.after(500, lambda: self._start_processing_with_mode(mode_key))
+            else:
+                # Revert to previous mode
+                # This is a simplified approach - in production you'd track the previous mode
+                pass
+    
     def _setup_left_panel(self, parent):
         """Setup left panel with config, controls, and stats."""
         # Config section
@@ -159,16 +239,166 @@ class RealtimeOCRGUI:
         ttk.Button(window_frame, text="🔄", command=self._refresh_windows, width=3).grid(row=0, column=1, padx=(5, 0))
         
         # Confidence
-        ttk.Label(config_group, text="信頼度:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        confidence_label_frame = ttk.Frame(config_group)
+        confidence_label_frame.grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(confidence_label_frame, text="信頼度:").pack(side=tk.LEFT)
+        confidence_hint = ttk.Label(confidence_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        confidence_hint.pack(side=tk.LEFT)
+        ToolTip(confidence_hint, 
+                "物体検出の信頼度しきい値です。\n"
+                "高い値: 検出数が減り、FPSが向上しますが、見逃しが増えます\n"
+                "低い値: 検出数が増えますが、FPSが低下します\n"
+                "推奨: 0.6〜0.7")
+        
         self.confidence_var = tk.DoubleVar(value=self.config.confidence_threshold)
-        ttk.Scale(config_group, from_=0.0, to=1.0, variable=self.confidence_var, orient=tk.HORIZONTAL).grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        confidence_scale_frame = ttk.Frame(config_group)
+        confidence_scale_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(confidence_scale_frame, from_=0.0, to=1.0, variable=self.confidence_var, 
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(confidence_scale_frame, textvariable=self.confidence_var, 
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
         
         # OCR language
-        ttk.Label(config_group, text="OCR言語:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ocr_lang_label_frame = ttk.Frame(config_group)
+        ocr_lang_label_frame.grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(ocr_lang_label_frame, text="OCR言語:").pack(side=tk.LEFT)
+        ocr_lang_hint = ttk.Label(ocr_lang_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        ocr_lang_hint.pack(side=tk.LEFT)
+        ToolTip(ocr_lang_hint,
+                "OCRで認識する言語を選択します。\n"
+                "jpn: 日本語のみ（高速）\n"
+                "eng: 英語のみ\n"
+                "jpn+eng: 日本語と英語（やや低速）")
+        
         self.ocr_lang_var = tk.StringVar(value=self.config.ocr_lang)
-        ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], state='readonly', width=27).grid(row=2, column=1, pady=5, padx=5)
+        ttk.Combobox(config_group, textvariable=self.ocr_lang_var, values=['jpn', 'eng', 'jpn+eng'], 
+                    state='readonly', width=27).grid(row=2, column=1, pady=5, padx=5)
+        
+        # Performance mode
+        perf_mode_label_frame = ttk.Frame(config_group)
+        perf_mode_label_frame.grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(perf_mode_label_frame, text="パフォーマンスモード:").pack(side=tk.LEFT)
+        perf_mode_hint = ttk.Label(perf_mode_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        perf_mode_hint.pack(side=tk.LEFT)
+        ToolTip(perf_mode_hint,
+                "処理速度と精度のバランスを選択します。\n\n"
+                "高速: FPS優先（10-15 FPS目標）\n"
+                "  - フレームスキップ有効\n"
+                "  - キャッシュを積極活用\n\n"
+                "バランス: 標準設定（5-10 FPS目標）\n"
+                "  - 全フレーム処理\n"
+                "  - キャッシュ有効\n\n"
+                "高精度: 精度優先（3-5 FPS目標）\n"
+                "  - キャッシュ無効\n"
+                "  - 毎回検出とOCR実行")
+        
+        self.performance_mode_var = tk.StringVar(value="balanced")
+        available_modes = get_available_modes()
+        mode_display_values = [f"{key} ({name})" for key, name in available_modes.items()]
+        self.performance_mode_combo = ttk.Combobox(
+            config_group,
+            textvariable=self.performance_mode_var,
+            values=list(available_modes.keys()),
+            state='readonly',
+            width=27
+        )
+        self.performance_mode_combo.grid(row=3, column=1, pady=5, padx=5)
+        
+        # Display mode names in combobox
+        self.performance_mode_combo['values'] = mode_display_values
+        self.performance_mode_combo.set("balanced (バランス)")
+        
+        # Bind mode change event
+        self.performance_mode_combo.bind('<<ComboboxSelected>>', self._on_performance_mode_changed)
         
         config_group.columnconfigure(1, weight=1)
+        
+        # Advanced settings section (collapsible)
+        advanced_group = ttk.LabelFrame(parent, text="詳細設定（パフォーマンスチューニング）", padding="10")
+        advanced_group.pack(fill=tk.X, pady=(0, 10))
+        
+        # Detection cache TTL
+        detection_ttl_label_frame = ttk.Frame(advanced_group)
+        detection_ttl_label_frame.grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(detection_ttl_label_frame, text="検出キャッシュTTL (秒):").pack(side=tk.LEFT)
+        detection_ttl_hint = ttk.Label(detection_ttl_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        detection_ttl_hint.pack(side=tk.LEFT)
+        ToolTip(detection_ttl_hint,
+                "検出結果をキャッシュする有効期限です。\n\n"
+                "長い値（1.0秒以上）:\n"
+                "  ✓ キャッシュヒット率が上がりFPS向上\n"
+                "  ✗ 新規項目の検出が遅れる\n\n"
+                "短い値（0.5秒以下）:\n"
+                "  ✓ 新規項目を素早く検出\n"
+                "  ✗ キャッシュヒット率が下がりFPS低下\n\n"
+                "推奨: 0.5〜1.0秒")
+        
+        self.detection_cache_ttl_var = tk.DoubleVar(value=self.config.detection_cache_ttl)
+        detection_ttl_frame = ttk.Frame(advanced_group)
+        detection_ttl_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(detection_ttl_frame, from_=0.3, to=2.0, variable=self.detection_cache_ttl_var, 
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(detection_ttl_frame, textvariable=self.detection_cache_ttl_var, 
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Detection cache similarity
+        detection_sim_label_frame = ttk.Frame(advanced_group)
+        detection_sim_label_frame.grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(detection_sim_label_frame, text="フレーム類似度:").pack(side=tk.LEFT)
+        detection_sim_hint = ttk.Label(detection_sim_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        detection_sim_hint.pack(side=tk.LEFT)
+        ToolTip(detection_sim_hint,
+                "フレームが類似していると判定するしきい値です。\n\n"
+                "高い値（0.95以上）:\n"
+                "  ✓ より確実に変化を検出\n"
+                "  ✗ キャッシュヒット率が下がる\n\n"
+                "低い値（0.90以下）:\n"
+                "  ✓ キャッシュヒット率が上がりFPS向上\n"
+                "  ✗ 変化を見逃す可能性\n\n"
+                "推奨: 0.90〜0.95")
+        
+        self.detection_similarity_var = tk.DoubleVar(value=self.config.detection_cache_similarity)
+        detection_sim_frame = ttk.Frame(advanced_group)
+        detection_sim_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(detection_sim_frame, from_=0.85, to=0.98, variable=self.detection_similarity_var,
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(detection_sim_frame, textvariable=self.detection_similarity_var,
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # OCR cache position tolerance
+        ocr_pos_label_frame = ttk.Frame(advanced_group)
+        ocr_pos_label_frame.grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(ocr_pos_label_frame, text="OCR位置許容範囲 (px):").pack(side=tk.LEFT)
+        ocr_pos_hint = ttk.Label(ocr_pos_label_frame, text=" ℹ️", foreground="cyan", cursor="hand2")
+        ocr_pos_hint.pack(side=tk.LEFT)
+        ToolTip(ocr_pos_hint,
+                "OCR結果をキャッシュする際の位置の許容誤差です。\n\n"
+                "大きい値（15px以上）:\n"
+                "  ✓ OCRキャッシュヒット率が上がる\n"
+                "  ✗ 異なる項目を同一と誤認する可能性\n\n"
+                "小さい値（10px以下）:\n"
+                "  ✓ より正確にキャッシュ判定\n"
+                "  ✗ キャッシュヒット率が下がる\n\n"
+                "推奨: 10〜15ピクセル")
+        
+        self.ocr_position_tolerance_var = tk.IntVar(value=self.config.ocr_cache_position_tolerance)
+        ocr_pos_frame = ttk.Frame(advanced_group)
+        ocr_pos_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=5)
+        ttk.Scale(ocr_pos_frame, from_=5, to=25, variable=self.ocr_position_tolerance_var,
+                 orient=tk.HORIZONTAL).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(ocr_pos_frame, textvariable=self.ocr_position_tolerance_var,
+                 width=5).pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Apply button
+        ttk.Button(advanced_group, text="設定を適用", command=self._apply_advanced_settings).grid(
+            row=3, column=0, columnspan=2, pady=(10, 0))
+        
+        # Help text
+        help_text = ttk.Label(advanced_group, text="※ 設定変更後、処理を再起動すると反映されます", 
+                             font=('TkDefaultFont', 8), foreground='gray')
+        help_text.grid(row=4, column=0, columnspan=2, pady=(5, 0))
+        
+        advanced_group.columnconfigure(1, weight=1)
         
         # Control section
         control_group = ttk.LabelFrame(parent, text="制御", padding="10")
@@ -220,7 +450,26 @@ class RealtimeOCRGUI:
         
         self.fps_var = tk.StringVar(value="0.0")
         ttk.Label(stats_group, text="FPS:").grid(row=3, column=0, sticky=tk.W, pady=2)
-        ttk.Label(stats_group, textvariable=self.fps_var, foreground='blue').grid(row=3, column=1, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.fps_var, foreground='cyan').grid(row=3, column=1, sticky=tk.W, pady=2)
+        
+        # Performance metrics
+        ttk.Separator(stats_group, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        self.avg_capture_var = tk.StringVar(value="0.0ms")
+        ttk.Label(stats_group, text="平均キャプチャ時間:").grid(row=5, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.avg_capture_var, font=('TkDefaultFont', 8)).grid(row=5, column=1, sticky=tk.W, pady=2)
+        
+        self.avg_detection_var = tk.StringVar(value="0.0ms")
+        ttk.Label(stats_group, text="平均検出時間:").grid(row=6, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.avg_detection_var, font=('TkDefaultFont', 8)).grid(row=6, column=1, sticky=tk.W, pady=2)
+        
+        self.avg_ocr_var = tk.StringVar(value="0.0ms")
+        ttk.Label(stats_group, text="平均OCR時間:").grid(row=7, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.avg_ocr_var, font=('TkDefaultFont', 8)).grid(row=7, column=1, sticky=tk.W, pady=2)
+        
+        self.cache_hit_rate_var = tk.StringVar(value="0.0%")
+        ttk.Label(stats_group, text="キャッシュヒット率:").grid(row=8, column=0, sticky=tk.W, pady=2)
+        ttk.Label(stats_group, textvariable=self.cache_hit_rate_var, foreground='purple').grid(row=8, column=1, sticky=tk.W, pady=2)
         
         self._update_stats()
     
@@ -261,7 +510,7 @@ class RealtimeOCRGUI:
         self.log_text.tag_config('new', foreground='green')
         self.log_text.tag_config('duplicate', foreground='orange')
         self.log_text.tag_config('error', foreground='red')
-        self.log_text.tag_config('info', foreground='blue')
+        self.log_text.tag_config('info', foreground='cyan')
     
     def _select_window_and_preview(self):
         """Select window and start preview."""
@@ -359,6 +608,40 @@ class RealtimeOCRGUI:
         elif current_state == "paused":
             self._set_state("processing")
     
+    def _apply_advanced_settings(self):
+        """詳細設定を適用"""
+        try:
+            # 設定を更新
+            self.config.detection_cache_ttl = round(self.detection_cache_ttl_var.get(), 2)
+            self.config.detection_cache_similarity = round(self.detection_similarity_var.get(), 2)
+            self.config.ocr_cache_position_tolerance = int(self.ocr_position_tolerance_var.get())
+            
+            # 処理中の場合は再起動を促す
+            current_state = self._get_current_state()
+            if current_state in ["processing", "paused"]:
+                if messagebox.askyesno(
+                    "設定適用",
+                    "設定を反映するには処理を再起動する必要があります。今すぐ再起動しますか？"
+                ):
+                    # 処理を停止して再起動
+                    self._stop_processing()
+                    self.root.after(500, self._start_processing)
+                else:
+                    messagebox.showinfo("設定適用", "設定は保存されました。次回の処理開始時に反映されます。")
+            else:
+                messagebox.showinfo("設定適用", "設定が保存されました。")
+            
+            # ログに記録
+            self.log_queue.put((
+                f"詳細設定を更新: TTL={self.config.detection_cache_ttl}s, "
+                f"類似度={self.config.detection_cache_similarity}, "
+                f"位置許容={self.config.ocr_cache_position_tolerance}px",
+                'info'
+            ))
+            
+        except Exception as e:
+            messagebox.showerror("エラー", f"設定の適用に失敗しました: {str(e)}")
+    
     def _start_preview(self):
         """Start preview loop (capture only)."""
         self.preview_stop_event.clear()
@@ -412,15 +695,51 @@ class RealtimeOCRGUI:
             messagebox.showwarning("警告", "先にウィンドウを選択してプレビューを開始してください")
             return
         
+        # Get mode key from display value
+        selected_display = self.performance_mode_combo.get()
+        mode_key = selected_display.split(' (')[0]
+        
+        self._start_processing_with_mode(mode_key)
+    
+    def _start_processing_with_mode(self, mode_key: str):
+        """指定されたモードで処理を開始
+        
+        Args:
+            mode_key: パフォーマンスモードキー（"fast", "balanced", "accurate"）
+        """
         self.config.confidence_threshold = self.confidence_var.get()
         self.config.ocr_lang = self.ocr_lang_var.get()
+        self.config.target_window_title = self.window_title_var.get()
+        
+        # 詳細設定を反映
+        self.config.detection_cache_ttl = round(self.detection_cache_ttl_var.get(), 2)
+        self.config.detection_cache_similarity = round(self.detection_similarity_var.get(), 2)
+        self.config.ocr_cache_position_tolerance = int(self.ocr_position_tolerance_var.get())
         
         try:
-            self.data_manager = DataManager(output_path=self.config.output_csv)
-            self.object_detector = ObjectDetector(model_path=self.config.model_path, confidence_threshold=self.config.confidence_threshold)
-            self.ocr_processor = OCRProcessor(lang=self.config.ocr_lang, margin=self.config.ocr_margin)
+            # PipelineProcessorを初期化
+            self.pipeline_processor = PipelineProcessor(
+                config=self.config,
+                performance_mode=mode_key,
+                on_new_text_callback=self._on_new_text_detected
+            )
+            
+            # パイプライン処理を開始
+            self.pipeline_processor.start()
+            
+            # データマネージャーへの参照を保持
+            self.data_manager = self.pipeline_processor.data_manager
+            
         except Exception as e:
+            self.log_queue.put((f"初期化エラー: {str(e)}", 'error'))
             messagebox.showerror("初期化エラー", str(e))
+            # クリーンアップ
+            if self.pipeline_processor:
+                try:
+                    self.pipeline_processor.stop()
+                except Exception:
+                    pass
+                self.pipeline_processor = None
             return
         
         self.stats['start_time'] = datetime.now()
@@ -430,19 +749,36 @@ class RealtimeOCRGUI:
         self.stats['last_fps_update'] = None
         self.stats['frame_count_for_fps'] = 0
         
+        # 表示更新スレッドを開始
         self.processing_stop_event.clear()
-        self.processing_thread = threading.Thread(target=self._processing_loop, daemon=True)
+        self.processing_thread = threading.Thread(target=self._display_loop, daemon=True)
         self.processing_thread.start()
         
         self._set_state("processing")
     
     def _stop_processing(self):
         """Stop processing (but keep preview running)."""
-        self.processing_stop_event.set()
-        if self.processing_thread:
-            self.processing_thread.join(timeout=2.0)
-        
-        self._set_state("preview")
+        try:
+            # パイプラインプロセッサを停止
+            if self.pipeline_processor:
+                try:
+                    self.pipeline_processor.stop()
+                except Exception as e:
+                    self.log_queue.put((f"パイプライン停止エラー: {str(e)}", 'error'))
+                finally:
+                    self.pipeline_processor = None
+            
+            # 表示スレッドを停止
+            self.processing_stop_event.set()
+            if self.processing_thread and self.processing_thread.is_alive():
+                self.processing_thread.join(timeout=2.0)
+                if self.processing_thread.is_alive():
+                    self.log_queue.put(("表示スレッドが正常に停止しませんでした", 'warning'))
+            
+            self._set_state("preview")
+            
+        except Exception as e:
+            self.log_queue.put((f"処理停止エラー: {str(e)}", 'error'))
     
     def _export_csv(self):
         """Export to CSV."""
@@ -453,84 +789,91 @@ class RealtimeOCRGUI:
             except Exception as e:
                 messagebox.showerror("エラー", str(e))
     
-    def _processing_loop(self):
-        """Processing loop - detection and OCR only."""
+    def _on_new_text_detected(self, text: str):
+        """新規テキスト検出時のコールバック
+        
+        Args:
+            text: 検出された新規テキスト
+        """
+        # ログキューに新規テキストを追加
+        self.log_queue.put((f"[新規] {text}", 'new'))
+    
+    def _display_loop(self):
+        """Display loop - get frames from pipeline and display."""
+        consecutive_errors = 0
+        max_consecutive_errors = 10
+        
         try:
-            frame_start_time = datetime.now()
-            
             while not self.processing_stop_event.is_set():
-                if self.is_paused:
-                    self.processing_stop_event.wait(0.1)
-                    continue
-                
-                # Capture frame
-                if self.window_capture is None:
-                    break
-                
-                frame = self.window_capture.capture_frame()
-                
-                if frame is None:
-                    continue
-                
-                # Calculate FPS
-                current_time = datetime.now()
-                self.stats['frame_count_for_fps'] += 1
-                
-                if self.stats['last_fps_update'] is None:
-                    self.stats['last_fps_update'] = current_time
-                
-                time_diff = (current_time - self.stats['last_fps_update']).total_seconds()
-                if time_diff >= 1.0:  # Update FPS every second
-                    self.stats['fps'] = self.stats['frame_count_for_fps'] / time_diff
-                    self.stats['frame_count_for_fps'] = 0
-                    self.stats['last_fps_update'] = current_time
-                
-                # Detect objects
-                detections = self.object_detector.detect(frame)
-                self.stats['frames_processed'] += 1
-                
-                # Process OCR for each detection
-                for detection in detections:
-                    text = self.ocr_processor.extract_text(frame, detection)
-                    if text:
-                        is_new = self.data_manager.add_text(text)
-                        self.log_queue.put((text, 'new' if is_new else 'duplicate'))
-                        if is_new:
-                            self.stats['new_detections'] += 1
-                
-                # Draw detections on frame
-                frame_copy = frame.copy()
-                for detection in detections:
-                    try:
-                        cv2.rectangle(
-                            frame_copy,
-                            (int(detection.x1), int(detection.y1)),
-                            (int(detection.x2), int(detection.y2)),
-                            (0, 255, 0),
-                            2
-                        )
-                    except Exception:
-                        pass  # Skip drawing if error
-                
-                # Send frame to display (override preview frame)
                 try:
-                    # Clear queue and put new frame
-                    while not self.frame_queue.empty():
+                    if self.is_paused:
+                        self.processing_stop_event.wait(0.1)
+                        continue
+                    
+                    if self.pipeline_processor is None:
+                        break
+                    
+                    # パイプラインが実行中かチェック
+                    if not self.pipeline_processor.is_running():
+                        self.log_queue.put(("パイプラインが停止しました", 'warning'))
+                        break
+                    
+                    # 表示キューから最新フレームを取得
+                    frame = self.pipeline_processor.get_display_frame(timeout=0.1)
+                    
+                    if frame is not None:
+                        # フレームを表示キューに送信
                         try:
-                            self.frame_queue.get_nowait()
-                        except queue.Empty:
-                            break
-                    self.frame_queue.put_nowait(frame_copy)
-                except queue.Full:
-                    pass
+                            # Clear queue and put new frame
+                            while not self.frame_queue.empty():
+                                try:
+                                    self.frame_queue.get_nowait()
+                                except queue.Empty:
+                                    break
+                            self.frame_queue.put_nowait(frame)
+                        except queue.Full:
+                            pass
+                        
+                        self.stats['frames_processed'] += 1
+                        consecutive_errors = 0  # 成功したらリセット
+                    
+                    # データマネージャーから新規検出数を取得
+                    if self.data_manager:
+                        try:
+                            current_count = self.data_manager.get_count()
+                            self.stats['new_detections'] = current_count
+                        except Exception as dm_error:
+                            self.log_queue.put((f"データマネージャーエラー: {str(dm_error)}", 'warning'))
                 
-                # No delay - run as fast as possible to maximize FPS
+                except Exception as e:
+                    consecutive_errors += 1
+                    self.log_queue.put((f"表示ループエラー (試行 {consecutive_errors}/{max_consecutive_errors}): {str(e)}", 'error'))
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        self.log_queue.put(("連続エラーが多すぎるため、表示ループを停止します", 'error'))
+                        break
+                    
+                    self.processing_stop_event.wait(0.1)
+                
         except Exception as e:
-            self.log_queue.put((f"処理エラー: {str(e)}", 'error'))
+            self.log_queue.put((f"表示ループの致命的エラー: {str(e)}", 'error'))
+        
+        finally:
+            # クリーンアップ
+            if self.pipeline_processor:
+                try:
+                    self.pipeline_processor.stop()
+                except Exception:
+                    pass
     
     def _process_queues(self):
-        """Process queues."""
-        # Process frames
+        """Process queues.
+        
+        表示キューから最新フレームを取得して表示します。
+        パイプラインプロセッサが有効な場合、処理済みフレームが
+        _display_loopを通じてこのキューに送信されます。
+        """
+        # Process frames - 表示キューから最新フレームを取得
         try:
             while True:
                 frame = self.frame_queue.get_nowait()
@@ -585,7 +928,34 @@ class RealtimeOCRGUI:
             self.unique_count_var.set(str(self.data_manager.get_count()))
         self.frames_var.set(str(self.stats['frames_processed']))
         self.new_detections_var.set(str(self.stats['new_detections']))
-        self.fps_var.set(f"{self.stats['fps']:.1f}")
+        
+        # パイプラインプロセッサからパフォーマンスメトリクスを取得
+        if self.pipeline_processor:
+            try:
+                report = self.pipeline_processor.get_performance_report()
+                
+                # FPS（リアルタイム計測値を使用）
+                self.fps_var.set(f"{report.get('fps', 0.0):.1f}")
+                
+                # 各処理ステップの平均実行時間
+                avg_capture = report.get('avg_capture_time', 0.0) * 1000  # ms
+                avg_detection = report.get('avg_detection_time', 0.0) * 1000  # ms
+                avg_ocr = report.get('avg_ocr_time', 0.0) * 1000  # ms
+                
+                self.avg_capture_var.set(f"{avg_capture:.1f}ms")
+                self.avg_detection_var.set(f"{avg_detection:.1f}ms")
+                self.avg_ocr_var.set(f"{avg_ocr:.1f}ms")
+                
+                # キャッシュヒット率
+                cache_hit_rate = report.get('cache_hit_rate', 0.0) * 100  # %
+                self.cache_hit_rate_var.set(f"{cache_hit_rate:.1f}%")
+                
+            except Exception as e:
+                # エラーが発生した場合はデフォルト値を使用
+                pass
+        else:
+            # パイプラインプロセッサが無い場合は従来のFPS計算
+            self.fps_var.set(f"{self.stats['fps']:.1f}")
         
         self.root.after(1000, self._update_stats)
     

@@ -117,6 +117,12 @@ class Visualizer:
         cv2.destroyAllWindows()
         self._window_created = False
     
+    def close(self) -> None:
+        """
+        ウィンドウをクローズ（cleanupのエイリアス）
+        """
+        self.cleanup()
+    
     def __del__(self):
         """
         デストラクタ: オブジェクト破棄時にウィンドウをクローズ

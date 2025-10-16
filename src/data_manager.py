@@ -5,7 +5,7 @@ This module handles duplicate detection and CSV export of extracted text data.
 """
 
 from pathlib import Path
-from typing import Set
+from typing import Set, Callable, Optional
 import pandas as pd
 
 
@@ -18,23 +18,27 @@ class DataManager:
     Attributes:
         output_path: 出力CSVファイルのパス
         extracted_texts: 抽出されたユニークなテキストのセット
+        on_new_text_callback: 新規テキスト追加時のコールバック関数
     """
     
-    def __init__(self, output_path: str = "book_data_realtime.csv"):
+    def __init__(self, output_path: str = "book_data_realtime.csv", 
+                 on_new_text_callback: Optional[Callable[[str], None]] = None):
         """
         DataManagerを初期化します。
         
         Args:
             output_path: 出力CSVファイルのパス（デフォルト: "book_data_realtime.csv"）
+            on_new_text_callback: 新規テキスト追加時に呼び出されるコールバック関数
         """
         self.output_path = Path(output_path)
         self.extracted_texts: Set[str] = set()
+        self.on_new_text_callback = on_new_text_callback
     
     def add_text(self, text: str) -> bool:
         """
         テキストを追加します（重複チェック付き）。
         
-        新規データの場合はターミナルに出力します。
+        新規データの場合はターミナルに出力し、コールバックを呼び出します。
         
         Args:
             text: 抽出されたテキスト
@@ -58,6 +62,13 @@ class DataManager:
         
         # ターミナルに出力
         print(f"[新規データ検出] {normalized_text}")
+        
+        # コールバックを呼び出し
+        if self.on_new_text_callback:
+            try:
+                self.on_new_text_callback(normalized_text)
+            except Exception as e:
+                print(f"[警告] コールバック実行エラー: {e}")
         
         return True
     
