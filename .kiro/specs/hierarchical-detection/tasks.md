@@ -158,8 +158,8 @@
   - OCR エラー時は空文字列を返して処理を継続
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 9. 設定管理の拡張
-- [ ] 9.1 AppConfig データクラスを拡張
+- [x] 9. 設定管理の拡張
+- [x] 9.1 AppConfig データクラスを拡張
 
   - src/config.py を更新
   - 階層的検出関連の設定項目を追加（hierarchical_model_path, use_hierarchical_detection, iou_threshold, similarity_threshold, session_output_dir, hierarchical_csv_output）
