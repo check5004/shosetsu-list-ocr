@@ -30,29 +30,29 @@
   - 完全一致（IoU=1.0）、部分重複、非重複（IoU=0.0）のテストケースを実装
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 12.4_
 
-- [-] 4. HierarchicalDetector モジュールの実装
-- [ ] 4.1 データクラスの定義
+- [x] 4. HierarchicalDetector モジュールの実装
+- [x] 4.1 データクラスの定義
 
   - src/hierarchical_detector.py を作成
   - HierarchicalDetectionResult データクラスを定義
   - has_required_fields()メソッドと get_error_status()メソッドを実装
   - _Requirements: 2.7, 4.3, 4.4_
 
-- [ ] 4.2 HierarchicalDetector クラスの基本構造を作成
+- [x] 4.2 HierarchicalDetector クラスの基本構造を作成
 
   - HierarchicalDetector クラスを定義
   - 初期化メソッドを実装（モデルロード、しきい値設定）
   - 5 クラスの class_names を定義
   - _Requirements: 1.1, 2.1_
 
-- [ ] 4.3 検出と分類ロジックを実装
+- [x] 4.3 検出と分類ロジックを実装
 
   - detect()メソッドを実装
   - YOLOv8 推論を実行し、5 クラスの検出結果を取得
   - 検出結果を list-item と子要素に分類
   - _Requirements: 2.1, 2.2_
 
-- [ ] 4.4 親子関係構築ロジックを実装
+- [x] 4.4 親子関係構築ロジックを実装
 
   - \_build_hierarchy()メソッドを実装
   - 各子要素について、IoU が最大かつしきい値以上の list-item を親として紐付け
