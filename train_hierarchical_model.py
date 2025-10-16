@@ -5,7 +5,84 @@
 5クラス（list-item, title, progress, last_read_date, site_name）を検出する
 YOLOv8モデルをトレーニングします。
 
-少量データ（9枚）での過学習を防ぐため、データ拡張を積極的に活用します。
+少量データ（9〜10枚）での過学習を防ぐため、データ拡張を積極的に活用します。
+
+使用方法:
+    $ python train_hierarchical_model.py
+
+データセット要件:
+    - データセット配置: temp/shosetsu-list-item_dataset_v2/
+    - アノテーション形式: YOLO形式（class_id x_center y_center width height）
+    - クラス数: 5
+    - クラスラベル: list-item, title, progress, last_read_date, site_name
+
+出力:
+    - ベストモデル: models/hierarchical-detection/weights/best.pt
+    - 最終モデル: models/hierarchical-detection/weights/last.pt
+    - コピー: models/hierarchical_best.pt（アプリケーションで使用）
+    - 学習結果: models/hierarchical-detection/results.csv
+    - 学習曲線: models/hierarchical-detection/results.png
+    - 混同行列: models/hierarchical-detection/confusion_matrix.png
+
+データ拡張パラメータ:
+    - hsv_h=0.02: 色相の変動（やや増加）
+    - hsv_s=0.8: 彩度の変動（増加）
+    - hsv_v=0.5: 明度の変動（増加）
+    - degrees=15: 回転角度（増加）
+    - translate=0.15: 平行移動（増加）
+    - scale=0.6: スケール変動（増加）
+    - mosaic=1.0: モザイク拡張（有効）
+    - mixup=0.0: Mixup拡張（無効化・安定性のため）
+    - copy_paste=0.0: Copy-Paste拡張（無効化・安定性のため）
+    - flipud=0.0: 上下反転（無効・テキストには不適切）
+    - fliplr=0.0: 左右反転（無効・テキストには不適切）
+
+学習設定:
+    - エポック数: 100
+    - 画像サイズ: 1280（元画像のアスペクト比を考慮）
+    - バッチサイズ: 4（画像サイズが大きいため小さめ）
+    - Early stopping patience: 20
+    - デバイス: mps/cuda/cpu（自動検出）
+
+学習結果の確認方法:
+    1. 学習曲線を確認: models/hierarchical-detection/results.png
+       - 各エポックでの損失、精度、mAPの推移を確認
+    
+    2. 混同行列を確認: models/hierarchical-detection/confusion_matrix.png
+       - 各クラスの検出精度と誤検出を確認
+    
+    3. 精度指標を確認: models/hierarchical-detection/results.csv
+       - mAP50、mAP50-95、Precision、Recallなどの詳細な指標
+    
+    4. ターミナル出力を確認:
+       - 各エポックの進捗と最終結果
+
+精度指標の見方:
+    - mAP50: IoU=0.5での平均精度（一般的な指標）
+    - mAP50-95: IoU=0.5〜0.95での平均精度（より厳密な指標）
+    - Precision: 検出結果のうち正解の割合（誤検出の少なさ）
+    - Recall: 正解のうち検出できた割合（見逃しの少なさ）
+
+トラブルシューティング:
+    過学習の兆候がある場合:
+        - データ拡張パラメータをさらに強化
+        - エポック数を減らす
+        - Early stopping patienceを小さくする
+    
+    精度が低い場合:
+        - アノテーションを見直す
+        - エポック数を増やす
+        - 学習データを追加する
+    
+    学習が不安定な場合:
+        - バッチサイズを小さくする（2に変更）
+        - 学習率を下げる（lr0=0.001を追加）
+        - データ拡張を弱める
+
+注意事項:
+    - 学習には時間がかかります（Apple Silicon M3 Proで約30分〜1時間）
+    - 学習中はCPU/GPUリソースを大量に消費します
+    - 学習結果は毎回異なる可能性があります（ランダム性のため）
 """
 
 from ultralytics import YOLO
@@ -14,6 +91,27 @@ import torch
 
 
 def main():
+    """
+    階層的検出モデルの学習を実行するメイン関数
+    
+    処理フロー:
+        1. デバイス情報の表示（MPS/CUDA/CPU）
+        2. データセット設定ファイルの確認
+        3. YOLOv8モデルのロード
+        4. トレーニング設定の表示
+        5. データ拡張設定の表示
+        6. トレーニングの実行
+        7. 学習結果の表示
+        8. ベストモデルのコピー
+        9. 精度指標の表示
+    
+    Raises:
+        FileNotFoundError: データセット設定ファイルが見つからない場合
+        Exception: トレーニング中にエラーが発生した場合
+    
+    Returns:
+        None
+    """
     print("=" * 80)
     print("YOLOv8 階層的検出モデルトレーニング")
     print("=" * 80)
