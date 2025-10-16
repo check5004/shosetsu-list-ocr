@@ -60,8 +60,10 @@ def process_hierarchical_detection(
                     print(f"  {element_name}: {text}")
                     
             except Exception as e:
-                # OCRエラー時は空文字列を返して処理を継続
-                print(f"⚠️  {element_name}のOCR処理でエラーが発生: {e}")
+                # OCR処理エラー時は空文字列を返して処理を継続
+                print(f"❌ {element_name}のOCR処理でエラーが発生（空文字列を返して処理を継続）: {e}")
+                print(f"   bbox: ({detection_result.x1}, {detection_result.y1}, "
+                      f"{detection_result.x2}, {detection_result.y2})")
                 ocr_texts[element_name] = ''
         else:
             # 検出されなかった要素は空文字列
@@ -101,7 +103,8 @@ def process_hierarchical_detections_batch(
             
         except Exception as e:
             # 予期しないエラーが発生した場合も処理を継続
-            print(f"❌ list-item {idx + 1} の処理でエラーが発生: {e}")
+            print(f"❌ list-item {idx + 1} の処理で予期しないエラーが発生（処理を継続）: {e}")
+            print(f"   エラー詳細: {type(e).__name__}")
             # 空の辞書を追加
             ocr_results.append({
                 'title': '',

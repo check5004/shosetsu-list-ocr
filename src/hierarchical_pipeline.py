@@ -178,8 +178,10 @@ class HierarchicalPipeline:
                         self.processed_count += 1
                     
                 except Exception as e:
-                    # 個別のlist-item処理でエラーが発生しても継続
-                    print(f"❌ list-item {idx + 1} の処理でエラーが発生: {e}")
+                    # 個別のlist-item処理で予期しないエラーが発生しても継続
+                    print(f"❌ list-item {idx + 1} の処理で予期しないエラーが発生（処理を継続）: {e}")
+                    print(f"   エラー詳細: {type(e).__name__}")
+                    print(f"   list_item_id: {hierarchical_result.list_item_id}")
                     continue
             
             if new_records_count > 0:
@@ -188,8 +190,11 @@ class HierarchicalPipeline:
             return new_records_count
             
         except Exception as e:
-            # フレーム処理全体でエラーが発生した場合
-            print(f"❌ フレーム {self.frame_count} の処理でエラーが発生: {e}")
+            # フレーム処理全体で予期しないエラーが発生した場合も処理を継続
+            print(f"❌ フレーム {self.frame_count} の処理で予期しないエラーが発生（処理を継続）: {e}")
+            print(f"   エラー詳細: {type(e).__name__}")
+            import traceback
+            print(f"   スタックトレース:\n{traceback.format_exc()}")
             return 0
     
     def _save_list_item_image(
@@ -217,7 +222,8 @@ class HierarchicalPipeline:
             
         except Exception as e:
             # 画像保存エラー時はエラーログを出力して処理を継続
-            print(f"⚠️  画像保存エラー: {e}")
+            print(f"❌ 画像保存エラー（処理を継続）: {e}")
+            print(f"   list_item_id: {hierarchical_result.list_item_id}")
             # エラー時は空のパスを返す
             return ""
     
@@ -245,8 +251,9 @@ class HierarchicalPipeline:
             return ocr_texts
             
         except Exception as e:
-            # OCRエラー時は空文字列を返して処理を継続
-            print(f"⚠️  OCR処理エラー: {e}")
+            # OCR処理エラー時は空文字列を返して処理を継続
+            print(f"❌ OCR処理エラー（空文字列を返して処理を継続）: {e}")
+            print(f"   list_item_id: {hierarchical_result.list_item_id}")
             return {
                 'title': '',
                 'progress': '',

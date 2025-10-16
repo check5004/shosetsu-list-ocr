@@ -28,6 +28,7 @@ def calculate_iou(
         - 0.0: 2つのboxが全く重ならない
         - 1.0: 2つのboxが完全に一致
         - 0.0 < IoU < 1.0: 部分的に重なる
+        エラー時はデフォルト値0.0を返す
     
     Examples:
         >>> from src.object_detector import DetectionResult
@@ -42,48 +43,64 @@ def calculate_iou(
         >>> print(f"IoU: {iou:.2f}")
         IoU: 0.14
     """
-    # DetectionResultオブジェクトの場合は座標を抽出
-    if isinstance(box1, DetectionResult):
-        x1_1, y1_1, x2_1, y2_1 = box1.x1, box1.y1, box1.x2, box1.y2
-    else:
-        x1_1, y1_1, x2_1, y2_1 = box1
-    
-    if isinstance(box2, DetectionResult):
-        x1_2, y1_2, x2_2, y2_2 = box2.x1, box2.y1, box2.x2, box2.y2
-    else:
-        x1_2, y1_2, x2_2, y2_2 = box2
-    
-    # 交差領域（Intersection）の座標を計算
-    # 交差領域の左上座標は、2つのboxの左上座標の最大値
-    x1_inter = max(x1_1, x1_2)
-    y1_inter = max(y1_1, y1_2)
-    
-    # 交差領域の右下座標は、2つのboxの右下座標の最小値
-    x2_inter = min(x2_1, x2_2)
-    y2_inter = min(y2_1, y2_2)
-    
-    # 交差領域の面積を計算
-    # 2つのboxが重ならない場合（x2_inter < x1_inter または y2_inter < y1_inter）、
-    # 交差領域は存在しないため、IoU = 0.0を返す
-    if x2_inter < x1_inter or y2_inter < y1_inter:
+    try:
+        # DetectionResultオブジェクトの場合は座標を抽出
+        if isinstance(box1, DetectionResult):
+            x1_1, y1_1, x2_1, y2_1 = box1.x1, box1.y1, box1.x2, box1.y2
+        else:
+            x1_1, y1_1, x2_1, y2_1 = box1
+        
+        if isinstance(box2, DetectionResult):
+            x1_2, y1_2, x2_2, y2_2 = box2.x1, box2.y1, box2.x2, box2.y2
+        else:
+            x1_2, y1_2, x2_2, y2_2 = box2
+        
+        # 座標の妥当性チェック
+        if x2_1 <= x1_1 or y2_1 <= y1_1:
+            raise ValueError(f"box1の座標が無効です: ({x1_1}, {y1_1}, {x2_1}, {y2_1})")
+        if x2_2 <= x1_2 or y2_2 <= y1_2:
+            raise ValueError(f"box2の座標が無効です: ({x1_2}, {y1_2}, {x2_2}, {y2_2})")
+        
+        # 交差領域（Intersection）の座標を計算
+        # 交差領域の左上座標は、2つのboxの左上座標の最大値
+        x1_inter = max(x1_1, x1_2)
+        y1_inter = max(y1_1, y1_2)
+        
+        # 交差領域の右下座標は、2つのboxの右下座標の最小値
+        x2_inter = min(x2_1, x2_2)
+        y2_inter = min(y2_1, y2_2)
+        
+        # 交差領域の面積を計算
+        # 2つのboxが重ならない場合（x2_inter < x1_inter または y2_inter < y1_inter）、
+        # 交差領域は存在しないため、IoU = 0.0を返す
+        if x2_inter < x1_inter or y2_inter < y1_inter:
+            return 0.0
+        
+        inter_area = (x2_inter - x1_inter) * (y2_inter - y1_inter)
+        
+        # 各boxの面積を計算
+        box1_area = (x2_1 - x1_1) * (y2_1 - y1_1)
+        box2_area = (x2_2 - x1_2) * (y2_2 - y1_2)
+        
+        # 和領域（Union）の面積を計算
+        # Union = box1の面積 + box2の面積 - 交差領域の面積
+        # （交差領域は両方のboxに含まれるため、1回だけカウントする）
+        union_area = box1_area + box2_area - inter_area
+        
+        # IoUを計算
+        # union_areaが0の場合（両方のboxの面積が0）は、0.0を返す
+        if union_area <= 0:
+            return 0.0
+        
+        iou = inter_area / union_area
+        
+        # IoUの範囲チェック（0.0〜1.0）
+        if not (0.0 <= iou <= 1.0):
+            raise ValueError(f"計算されたIoU値が範囲外です: {iou}")
+        
+        return iou
+        
+    except Exception as e:
+        # IoU計算エラー時はデフォルト値（0.0）を返す
+        print(f"⚠️  IoU計算で予期しないエラーが発生（デフォルト値0.0を返す）: {e}")
         return 0.0
-    
-    inter_area = (x2_inter - x1_inter) * (y2_inter - y1_inter)
-    
-    # 各boxの面積を計算
-    box1_area = (x2_1 - x1_1) * (y2_1 - y1_1)
-    box2_area = (x2_2 - x1_2) * (y2_2 - y1_2)
-    
-    # 和領域（Union）の面積を計算
-    # Union = box1の面積 + box2の面積 - 交差領域の面積
-    # （交差領域は両方のboxに含まれるため、1回だけカウントする）
-    union_area = box1_area + box2_area - inter_area
-    
-    # IoUを計算
-    # union_areaが0の場合（両方のboxの面積が0）は、0.0を返す
-    if union_area <= 0:
-        return 0.0
-    
-    iou = inter_area / union_area
-    
-    return iou

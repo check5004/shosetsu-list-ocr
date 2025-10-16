@@ -80,29 +80,46 @@ class SessionManager:
         if not self.session_folder:
             raise RuntimeError("セッションが開始されていません。start_session()を先に呼び出してください。")
         
-        # マージン付きで切り出し座標を計算
-        x1 = max(0, bbox.x1 - margin)
-        y1 = max(0, bbox.y1 - margin)
-        x2 = min(frame.shape[1], bbox.x2 + margin)
-        y2 = min(frame.shape[0], bbox.y2 + margin)
-        
-        # 画像を切り出し
-        cropped = frame[y1:y2, x1:x2]
-        
-        # 一意のファイル名を生成
-        self.image_counter += 1
-        filename = f"list_item_{self.image_counter:03d}.jpg"
-        filepath = self.session_folder / filename
-        
-        # 画像を保存
         try:
-            cv2.imwrite(str(filepath), cropped)
+            # マージン付きで切り出し座標を計算
+            x1 = max(0, bbox.x1 - margin)
+            y1 = max(0, bbox.y1 - margin)
+            x2 = min(frame.shape[1], bbox.x2 + margin)
+            y2 = min(frame.shape[0], bbox.y2 + margin)
+            
+            # 座標の妥当性チェック
+            if x2 <= x1 or y2 <= y1:
+                raise ValueError(
+                    f"無効なbounding box座標: x1={x1}, y1={y1}, x2={x2}, y2={y2}"
+                )
+            
+            # 画像を切り出し
+            cropped = frame[y1:y2, x1:x2]
+            
+            # 切り出した画像が空でないかチェック
+            if cropped.size == 0:
+                raise ValueError("切り出した画像が空です")
+            
+            # 一意のファイル名を生成
+            self.image_counter += 1
+            filename = f"list_item_{self.image_counter:03d}.jpg"
+            filepath = self.session_folder / filename
+            
+            # 画像を保存
+            success = cv2.imwrite(str(filepath), cropped)
+            if not success:
+                raise IOError(f"画像の書き込みに失敗しました: {filepath}")
+            
+            # 相対パスを返す
+            return f"sessions/{self.session_timestamp}/{filename}"
+            
         except Exception as e:
-            print(f"❌ 画像保存エラー: {e}")
-            raise
-        
-        # 相対パスを返す
-        return f"sessions/{self.session_timestamp}/{filename}"
+            # 画像切り出し失敗時のエラーログ出力と処理継続
+            print(f"❌ 画像切り出し・保存エラー: {e}")
+            print(f"   bbox: ({bbox.x1}, {bbox.y1}, {bbox.x2}, {bbox.y2}), "
+                  f"frame shape: {frame.shape}, margin: {margin}")
+            # エラー時は空文字列を返して処理を継続
+            return ""
     
     def end_session(self) -> Optional[Path]:
         """

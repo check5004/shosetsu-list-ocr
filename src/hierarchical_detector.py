@@ -275,8 +275,11 @@ class HierarchicalDetector:
                             best_iou = iou
                             best_parent_idx = idx
                     except Exception as e:
-                        # IoU計算エラー時はデフォルト値（0.0）を使用
-                        print(f"⚠️  IoU計算エラー: {e}")
+                        # IoU計算エラー時はデフォルト値（0.0）を使用して処理を継続
+                        print(f"⚠️  IoU計算エラー（デフォルト値0.0を使用）: {e}")
+                        print(f"   list_item bbox: ({list_item.x1}, {list_item.y1}, {list_item.x2}, {list_item.y2})")
+                        print(f"   child bbox: ({child.x1}, {child.y1}, {child.x2}, {child.y2})")
+                        # デフォルト値0.0を使用（何もしない = IoU=0として扱う）
                         continue
                 
                 # 最適な親が見つかった場合、子要素を割り当て
