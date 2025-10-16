@@ -109,8 +109,8 @@
   - ZIP ファイルも除外設定に追加（\*.zip）
   - _Requirements: 5.10_
 
-- [ ] 7. HierarchicalDataManager モジュールの実装
-- [ ] 7.1 データクラスと HierarchicalDataManager クラスの基本構造を作成
+- [x] 7. HierarchicalDataManager モジュールの実装
+- [x] 7.1 データクラスと HierarchicalDataManager クラスの基本構造を作成
 
   - src/hierarchical_data_manager.py を作成
   - StructuredRecord データクラスを定義
@@ -118,7 +118,7 @@
   - 初期化メソッドを実装（similarity_threshold 設定）
   - _Requirements: 4.1, 7.1, 7.10_
 
-- [ ] 7.2 曖昧マッチングによる重複チェック機能を実装
+- [x] 7.2 曖昧マッチングによる重複チェック機能を実装
 
   - \_is_duplicate()メソッドを実装
   - difflib.SequenceMatcher を使用して文字列類似度を計算
@@ -126,7 +126,7 @@
   - 重複検出時、類似度と既存タイトルをログ出力
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.8_
 
-- [ ] 7.3 レコード追加機能を実装
+- [x] 7.3 レコード追加機能を実装
 
   - add_record()メソッドを実装
   - 曖昧マッチングで重複チェックを実行
@@ -134,7 +134,7 @@
   - 新規データ検出時、ターミナルにメッセージを表示
   - _Requirements: 7.6, 7.7, 7.9_
 
-- [ ] 7.4 CSV 出力機能を実装
+- [x] 7.4 CSV 出力機能を実装
 
   - export_to_csv()メソッドを実装
   - pandas を使用して DataFrame を作成
@@ -142,7 +142,7 @@
   - 統計情報（総件数、正常件数、エラー件数）を表示
   - _Requirements: 4.1, 4.2, 4.7, 4.8, 4.9_
 
-- [ ]\* 7.5 HierarchicalDataManager の単体テストを作成
+- [x] 7.5 HierarchicalDataManager の単体テストを作成
 
   - tests/test_hierarchical_data_manager.py を作成
   - 曖昧マッチングのテストケースを実装
