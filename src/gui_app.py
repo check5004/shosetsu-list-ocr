@@ -458,15 +458,16 @@ class RealtimeOCRGUI:
         image_folder_frame.pack(fill=tk.X, pady=(5, 0))
         
         self.open_folder_btn = ttk.Button(image_folder_frame, text="📁 画像フォルダを開く", 
-                                         command=self._open_session_folder, state=tk.DISABLED)
+                                         command=self._open_session_folder)
         self.open_folder_btn.pack(side=tk.LEFT, padx=5)
         
         folder_hint = ttk.Label(image_folder_frame, text="ℹ️", foreground="cyan", cursor="hand2")
         folder_hint.pack(side=tk.LEFT)
         ToolTip(folder_hint,
-                "階層的検出モードで処理中に切り出された\n"
-                "list-item画像を保存したフォルダを開きます。\n"
-                "※階層的検出モードで処理開始後に有効になります")
+                "階層的検出モードで切り出された\n"
+                "list-item画像が保存されているフォルダを開きます。\n"
+                "タイムスタンプ付きのセッションフォルダが格納されている\n"
+                "親ディレクトリが開きます。")
         
         # Status
         status_frame = ttk.Frame(control_group)
@@ -884,9 +885,6 @@ class RealtimeOCRGUI:
         if not self.visualizer:
             self.visualizer = Visualizer()
         
-        # 画像フォルダを開くボタンを有効化
-        self.open_folder_btn.config(state=tk.NORMAL)
-        
         self.log_queue.put((f"階層的検出モードで処理を開始しました（類似度しきい値: {self.config.similarity_threshold}）", 'info'))
     
     def _cleanup_processing_components(self):
@@ -928,7 +926,6 @@ class RealtimeOCRGUI:
                     self.log_queue.put((f"階層的パイプライン停止エラー: {str(e)}", 'error'))
                 finally:
                     self.hierarchical_pipeline = None
-                    # 画像フォルダを開くボタンは有効のまま（停止後もフォルダは開ける）
             
             # 表示スレッドを停止
             self.processing_stop_event.set()
@@ -957,14 +954,21 @@ class RealtimeOCRGUI:
                 messagebox.showerror("エラー", str(e))
     
     def _open_session_folder(self):
-        """セッションフォルダをFinderで開く"""
-        if self.session_manager:
-            try:
-                self.session_manager.open_session_folder()
-            except Exception as e:
-                messagebox.showerror("エラー", f"フォルダを開けませんでした: {str(e)}")
-        else:
-            messagebox.showwarning("警告", "階層的検出モードで処理を開始してください")
+        """画像出力フォルダをFinderで開く"""
+        try:
+            import subprocess
+            # タイムスタンプ付きフォルダが格納されている親ディレクトリを開く
+            output_dir = Path(self.config.hierarchical_output_dir)
+            
+            if not output_dir.exists():
+                messagebox.showwarning("警告", f"出力フォルダが存在しません: {output_dir}")
+                return
+            
+            # macOSのFinderでフォルダを開く
+            subprocess.run(['open', str(output_dir)], check=True)
+            
+        except Exception as e:
+            messagebox.showerror("エラー", f"フォルダを開けませんでした: {str(e)}")
     
     def _on_new_text_detected(self, text: str):
         """新規テキスト検出時のコールバック
