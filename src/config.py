@@ -31,6 +31,12 @@ class AppConfig:
         ocr_cache_position_tolerance: Position tolerance in pixels for OCR cache matching
         queue_max_size: Maximum size for processing queues
         display_queue_max_size: Maximum size for display queue
+        hierarchical_model_path: Path to the hierarchical detection model (5 classes)
+        use_hierarchical_detection: Enable hierarchical detection mode
+        iou_threshold: IoU threshold for parent-child relationship determination (0.0-1.0)
+        similarity_threshold: Text similarity threshold for duplicate detection (0.0-1.0)
+        session_output_dir: Directory for session-based image output
+        hierarchical_csv_output: Path to the hierarchical detection CSV output file
     """
     
     # Model settings
@@ -58,6 +64,14 @@ class AppConfig:
     ocr_cache_position_tolerance: int = 12  # 位置許容範囲（15→12ピクセルに調整）
     queue_max_size: int = 5
     display_queue_max_size: int = 2
+    
+    # Hierarchical detection settings
+    hierarchical_model_path: str = "models/hierarchical_best.pt"
+    use_hierarchical_detection: bool = False
+    iou_threshold: float = 0.5
+    similarity_threshold: float = 0.75
+    session_output_dir: str = "output/sessions"
+    hierarchical_csv_output: str = "output/hierarchical_data.csv"
     
     def validate(self) -> tuple[bool, Optional[str]]:
         """
@@ -136,6 +150,40 @@ class AppConfig:
         if self.display_queue_max_size < 1:
             return False, f"display_queue_max_size must be at least 1, got {self.display_queue_max_size}"
         
+        # Validate hierarchical detection settings
+        if self.use_hierarchical_detection:
+            # Validate hierarchical model path exists
+            if not Path(self.hierarchical_model_path).exists():
+                return False, f"Hierarchical model file not found: {self.hierarchical_model_path}"
+            
+            # Validate hierarchical model path is a file
+            if not Path(self.hierarchical_model_path).is_file():
+                return False, f"Hierarchical model path is not a file: {self.hierarchical_model_path}"
+        
+        # Validate IoU threshold
+        if not 0.0 <= self.iou_threshold <= 1.0:
+            return False, f"iou_threshold must be between 0.0 and 1.0, got {self.iou_threshold}"
+        
+        # Validate similarity threshold
+        if not 0.0 <= self.similarity_threshold <= 1.0:
+            return False, f"similarity_threshold must be between 0.0 and 1.0, got {self.similarity_threshold}"
+        
+        # Validate session output directory
+        if not self.session_output_dir or not self.session_output_dir.strip():
+            return False, "session_output_dir cannot be empty"
+        
+        # Validate hierarchical CSV output
+        if not self.hierarchical_csv_output or not self.hierarchical_csv_output.strip():
+            return False, "hierarchical_csv_output cannot be empty"
+        
+        # Validate hierarchical CSV output directory exists or can be created
+        hierarchical_output_dir = Path(self.hierarchical_csv_output).parent
+        if hierarchical_output_dir != Path('.') and not hierarchical_output_dir.exists():
+            try:
+                hierarchical_output_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                return False, f"Cannot create hierarchical output directory {hierarchical_output_dir}: {e}"
+        
         return True, None
     
     @classmethod
@@ -158,6 +206,12 @@ class AppConfig:
             OCR_OCR_CACHE_POSITION_TOLERANCE: OCR cache position tolerance in pixels
             OCR_QUEUE_MAX_SIZE: Maximum queue size
             OCR_DISPLAY_QUEUE_MAX_SIZE: Maximum display queue size
+            OCR_HIERARCHICAL_MODEL_PATH: Path to hierarchical detection model
+            OCR_USE_HIERARCHICAL_DETECTION: Enable hierarchical detection mode (true/false)
+            OCR_IOU_THRESHOLD: IoU threshold for parent-child relationship
+            OCR_SIMILARITY_THRESHOLD: Text similarity threshold for duplicate detection
+            OCR_SESSION_OUTPUT_DIR: Directory for session-based image output
+            OCR_HIERARCHICAL_CSV_OUTPUT: Path to hierarchical detection CSV output
         
         Returns:
             AppConfig instance with values from environment variables or defaults
@@ -180,6 +234,12 @@ class AppConfig:
             ocr_cache_position_tolerance=int(os.getenv('OCR_OCR_CACHE_POSITION_TOLERANCE', str(defaults.ocr_cache_position_tolerance))),
             queue_max_size=int(os.getenv('OCR_QUEUE_MAX_SIZE', str(defaults.queue_max_size))),
             display_queue_max_size=int(os.getenv('OCR_DISPLAY_QUEUE_MAX_SIZE', str(defaults.display_queue_max_size))),
+            hierarchical_model_path=os.getenv('OCR_HIERARCHICAL_MODEL_PATH', defaults.hierarchical_model_path),
+            use_hierarchical_detection=os.getenv('OCR_USE_HIERARCHICAL_DETECTION', str(defaults.use_hierarchical_detection)).lower() in ('true', '1', 'yes'),
+            iou_threshold=float(os.getenv('OCR_IOU_THRESHOLD', str(defaults.iou_threshold))),
+            similarity_threshold=float(os.getenv('OCR_SIMILARITY_THRESHOLD', str(defaults.similarity_threshold))),
+            session_output_dir=os.getenv('OCR_SESSION_OUTPUT_DIR', defaults.session_output_dir),
+            hierarchical_csv_output=os.getenv('OCR_HIERARCHICAL_CSV_OUTPUT', defaults.hierarchical_csv_output),
         )
     
     def __str__(self) -> str:
@@ -199,7 +259,13 @@ class AppConfig:
             f"  detection_cache_similarity={self.detection_cache_similarity},\n"
             f"  ocr_cache_position_tolerance={self.ocr_cache_position_tolerance},\n"
             f"  queue_max_size={self.queue_max_size},\n"
-            f"  display_queue_max_size={self.display_queue_max_size}\n"
+            f"  display_queue_max_size={self.display_queue_max_size},\n"
+            f"  hierarchical_model_path='{self.hierarchical_model_path}',\n"
+            f"  use_hierarchical_detection={self.use_hierarchical_detection},\n"
+            f"  iou_threshold={self.iou_threshold},\n"
+            f"  similarity_threshold={self.similarity_threshold},\n"
+            f"  session_output_dir='{self.session_output_dir}',\n"
+            f"  hierarchical_csv_output='{self.hierarchical_csv_output}'\n"
             f")"
         )
 

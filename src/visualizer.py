@@ -5,10 +5,13 @@
 OpenCVを使用してバウンディングボックスを描画し、ウィンドウに表示します。
 """
 
-from typing import List
+from typing import List, TYPE_CHECKING
 import numpy as np
 import cv2
 from src.object_detector import DetectionResult
+
+if TYPE_CHECKING:
+    from src.hierarchical_detector import HierarchicalDetectionResult
 
 
 class Visualizer:
@@ -122,6 +125,111 @@ class Visualizer:
         ウィンドウをクローズ（cleanupのエイリアス）
         """
         self.cleanup()
+    
+    def draw_hierarchical_detections(
+        self, 
+        frame: np.ndarray, 
+        hierarchical_results: List['HierarchicalDetectionResult']
+    ) -> np.ndarray:
+        """
+        階層的検出結果をフレームに描画
+        
+        5つのクラス（list-item, title, progress, last_read_date, site_name）を
+        異なる色で描画し、各クラスのラベルを表示します。
+        
+        Args:
+            frame: 元画像（BGR形式のnumpy配列）
+            hierarchical_results: 階層的検出結果のリスト
+        
+        Returns:
+            描画済みの画像（元画像のコピー）
+        """
+        # 元画像を変更しないようにコピーを作成
+        annotated_frame = frame.copy()
+        
+        # クラスごとの色を定義（BGR形式）
+        class_colors = {
+            'list-item': (0, 255, 0),      # 緑
+            'title': (255, 0, 0),           # 青
+            'progress': (0, 255, 255),      # 黄色
+            'last_read_date': (255, 0, 255),  # マゼンタ
+            'site_name': (0, 165, 255)      # オレンジ
+        }
+        
+        # 各階層的検出結果に対して描画
+        for hierarchical_result in hierarchical_results:
+            # list-item（親）を描画
+            self._draw_detection_box(
+                annotated_frame,
+                hierarchical_result.list_item_bbox,
+                class_colors['list-item'],
+                thickness=3  # 親は太い線で描画
+            )
+            
+            # 子要素を描画
+            for child_class in ['title', 'progress', 'last_read_date', 'site_name']:
+                child_detection = getattr(hierarchical_result, child_class, None)
+                if child_detection:
+                    self._draw_detection_box(
+                        annotated_frame,
+                        child_detection,
+                        class_colors[child_class],
+                        thickness=2
+                    )
+        
+        return annotated_frame
+    
+    def _draw_detection_box(
+        self,
+        frame: np.ndarray,
+        detection: DetectionResult,
+        color: tuple,
+        thickness: int = 2
+    ) -> None:
+        """
+        単一の検出結果をフレームに描画（内部ヘルパーメソッド）
+        
+        Args:
+            frame: 描画対象の画像（in-place変更）
+            detection: 検出結果
+            color: 描画色（BGR形式のタプル）
+            thickness: 線の太さ
+        """
+        # バウンディングボックスを描画
+        cv2.rectangle(
+            frame,
+            (detection.x1, detection.y1),
+            (detection.x2, detection.y2),
+            color=color,
+            thickness=thickness
+        )
+        
+        # クラス名と信頼度をラベルとして表示
+        label = f"{detection.class_name}: {detection.confidence:.2f}"
+        
+        # ラベルの背景を描画
+        label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        label_y = detection.y1 - 10 if detection.y1 - 10 > 10 else detection.y1 + 20
+        
+        cv2.rectangle(
+            frame,
+            (detection.x1, label_y - label_size[1] - 5),
+            (detection.x1 + label_size[0], label_y + 5),
+            color=color,
+            thickness=-1  # 塗りつぶし
+        )
+        
+        # ラベルテキストを描画
+        cv2.putText(
+            frame,
+            label,
+            (detection.x1, label_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),  # 白色のテキスト
+            1,
+            cv2.LINE_AA
+        )
     
     def __del__(self):
         """

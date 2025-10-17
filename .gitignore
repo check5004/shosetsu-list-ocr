@@ -67,7 +67,9 @@ Temporary Items
 
 # Project specific
 output/
+output/sessions/
 *.csv
+*.zip
 models/*.pt
 !models/.gitkeep
 temp/

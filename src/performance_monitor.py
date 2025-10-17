@@ -2,10 +2,12 @@
 パフォーマンス計測モジュール
 
 リアルタイムOCRアプリケーションのパフォーマンスを計測・監視するためのクラスを提供します。
-各処理ステップの実行時間、FPS、キャッシュヒット率などのメトリクスを収集します。
+各処理ステップの実行時間、FPS、キャッシュヒット率、メモリ使用量などのメトリクスを収集します。
 """
 
 import time
+import psutil
+import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from collections import deque
@@ -22,6 +24,8 @@ class PerformanceMetrics:
     cache_hit_rate: float = 0.0
     frames_processed: int = 0
     frames_skipped: int = 0
+    memory_usage_mb: float = 0.0
+    memory_percent: float = 0.0
 
 
 class FPSCounter:
@@ -98,6 +102,9 @@ class PerformanceMonitor:
         self.frames_skipped = 0
         self.cache_hits = 0
         self.cache_misses = 0
+        
+        # プロセス情報（メモリ使用量計測用）
+        self.process = psutil.Process(os.getpid())
     
     def start_timer(self, name: str) -> None:
         """
@@ -188,6 +195,22 @@ class PerformanceMonitor:
         
         return self.cache_hits / total
     
+    def get_memory_usage(self) -> tuple[float, float]:
+        """
+        現在のメモリ使用量を取得
+        
+        Returns:
+            (メモリ使用量(MB), メモリ使用率(%))のタプル
+        """
+        try:
+            mem_info = self.process.memory_info()
+            memory_mb = mem_info.rss / (1024 * 1024)  # バイトからMBに変換
+            memory_percent = self.process.memory_percent()
+            return memory_mb, memory_percent
+        except Exception as e:
+            print(f"⚠️  メモリ使用量の取得に失敗: {e}")
+            return 0.0, 0.0
+    
     def get_report(self) -> Dict[str, Any]:
         """
         パフォーマンスレポートを取得
@@ -195,6 +218,8 @@ class PerformanceMonitor:
         Returns:
             パフォーマンスメトリクスを含む辞書
         """
+        memory_mb, memory_percent = self.get_memory_usage()
+        
         return {
             'fps': self.fps_counter.get_fps(),
             'avg_capture_time': self.get_average('capture'),
@@ -206,6 +231,8 @@ class PerformanceMonitor:
             'frames_skipped': self.frames_skipped,
             'cache_hits': self.cache_hits,
             'cache_misses': self.cache_misses,
+            'memory_usage_mb': memory_mb,
+            'memory_percent': memory_percent,
         }
     
     def get_metrics_object(self) -> PerformanceMetrics:
@@ -225,6 +252,8 @@ class PerformanceMonitor:
             cache_hit_rate=report['cache_hit_rate'],
             frames_processed=report['frames_processed'],
             frames_skipped=report['frames_skipped'],
+            memory_usage_mb=report['memory_usage_mb'],
+            memory_percent=report['memory_percent'],
         )
     
     def reset(self) -> None:
@@ -271,13 +300,27 @@ class PerformanceMonitor:
         print(f"キャッシュヒット率: {report['cache_hit_rate']*100:.1f}%")
         print(f"キャッシュヒット数: {report['cache_hits']}")
         print(f"キャッシュミス数: {report['cache_misses']}")
+        print("-"*50)
+        print(f"メモリ使用量: {report['memory_usage_mb']:.1f} MB ({report['memory_percent']:.1f}%)")
         
         # ボトルネック警告
+        warnings = []
         if report['avg_detection_time'] > 0.2:
-            print("\n⚠️  警告: 検出処理が遅い（>200ms）")
+            warnings.append("⚠️  検出処理が遅い（>200ms）- 信頼度しきい値を上げるか、高速モードに切り替えてください")
         if report['avg_ocr_time'] > 0.3:
-            print("⚠️  警告: OCR処理が遅い（>300ms）")
-        if report['cache_hit_rate'] < 0.5:
-            print("⚠️  警告: キャッシュヒット率が低い（<50%）")
+            warnings.append("⚠️  OCR処理が遅い（>300ms）- 検出数を減らすか、OCRマージンを小さくしてください")
+        if report['cache_hit_rate'] < 0.5 and report['cache_hits'] + report['cache_misses'] > 10:
+            warnings.append("⚠️  キャッシュヒット率が低い（<50%）- 画面が頻繁に変化している可能性があります")
+        if report['memory_usage_mb'] > 1000:
+            warnings.append("⚠️  メモリ使用量が多い（>1GB）- キャッシュTTLを短くするか、処理を停止してください")
+        if report['fps'] < 3.0 and report['frames_processed'] > 30:
+            warnings.append("⚠️  FPSが低い（<3）- パフォーマンスモードを高速に切り替えるか、ウィンドウサイズを小さくしてください")
+        
+        if warnings:
+            print("\n" + "="*50)
+            print("パフォーマンス改善の提案:")
+            print("="*50)
+            for warning in warnings:
+                print(warning)
         
         print("="*50 + "\n")
