@@ -130,8 +130,16 @@ class HierarchicalDetector:
         # モデルファイルの存在チェック
         if not self.model_path.exists():
             raise FileNotFoundError(
-                f"モデルファイルが見つかりません: {self.model_path}\n"
-                f"階層的検出用YOLOv8モデルを {self.model_path} に配置してください。"
+                f"\n{'='*60}\n"
+                f"❌ エラー: 階層的検出モデルが見つかりません\n"
+                f"{'='*60}\n"
+                f"モデルパス: {self.model_path}\n\n"
+                f"解決方法:\n"
+                f"1. 学習スクリプトを実行してモデルを生成:\n"
+                f"   python scripts/train_hierarchical_model.py\n\n"
+                f"2. または、既存のモデルを以下のパスに配置:\n"
+                f"   {self.model_path}\n"
+                f"{'='*60}\n"
             )
         
         # YOLOv8モデルのロード
@@ -292,20 +300,30 @@ class HierarchicalDetector:
                     if existing_child is None or child.confidence > existing_child.confidence:
                         setattr(parent_result, child_class, child)
                 else:
-                    # 孤立した子要素を記録
-                    print(f"⚠️  孤立した{child_class}要素を検出: "
-                          f"confidence={child.confidence:.2f}, "
-                          f"bbox=({child.x1}, {child.y1}, {child.x2}, {child.y2})")
+                    # 孤立した子要素を記録（詳細情報付き）
+                    print(f"⚠️  孤立した{child_class}要素を検出:")
+                    print(f"   - 信頼度: {child.confidence:.2f}")
+                    print(f"   - 位置: ({child.x1}, {child.y1}) - ({child.x2}, {child.y2})")
+                    print(f"   - 原因: IoUしきい値({self.iou_threshold})以上のlist-itemが見つかりませんでした")
+                    print(f"   - 対策: IoUしきい値を下げる、またはアノテーションを見直してください")
         
         # 孤立した子要素の統計を出力
+        total_orphaned = 0
         for child_class, child_list in children.items():
             assigned_count = sum(
                 1 for result in hierarchical_results
                 if getattr(result, child_class, None) is not None
             )
             orphaned_count = len(child_list) - assigned_count
+            total_orphaned += orphaned_count
             
             if orphaned_count > 0:
-                print(f"⚠️  {child_class}: {orphaned_count}件の孤立要素")
+                print(f"⚠️  {child_class}: {orphaned_count}件の孤立要素が検出されました")
+        
+        if total_orphaned > 0:
+            print(f"\n💡 ヒント: 孤立要素が多い場合は以下を確認してください:")
+            print(f"   - IoUしきい値を下げる（現在: {self.iou_threshold}）")
+            print(f"   - アノテーションの精度を確認する")
+            print(f"   - list-itemの検出精度を向上させる")
         
         return hierarchical_results

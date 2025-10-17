@@ -7,6 +7,7 @@ mss>=9.0.0              # Cross-platform screen capture
 pyobjc-framework-Quartz>=9.0  # macOS window management
 numpy>=1.24.0           # Numerical computing
 torch>=2.0.0            # PyTorch for YOLOv8 (with MPS support for Apple Silicon)
+psutil>=5.9.0           # System and process utilities for performance monitoring
 
 # Testing Dependencies
 pytest>=7.4.0           # Testing framework

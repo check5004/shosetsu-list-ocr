@@ -78,7 +78,17 @@ class SessionManager:
             RuntimeError: セッションが開始されていない場合
         """
         if not self.session_folder:
-            raise RuntimeError("セッションが開始されていません。start_session()を先に呼び出してください。")
+            raise RuntimeError(
+                f"\n{'='*60}\n"
+                f"❌ エラー: セッションが開始されていません\n"
+                f"{'='*60}\n"
+                f"画像を保存する前に、start_session()を呼び出してください。\n\n"
+                f"使用例:\n"
+                f"  session_manager = SessionManager()\n"
+                f"  session_manager.start_session()  # セッション開始\n"
+                f"  session_manager.save_list_item_image(frame, bbox)  # 画像保存\n"
+                f"{'='*60}\n"
+            )
         
         try:
             # マージン付きで切り出し座標を計算
@@ -115,9 +125,12 @@ class SessionManager:
             
         except Exception as e:
             # 画像切り出し失敗時のエラーログ出力と処理継続
-            print(f"❌ 画像切り出し・保存エラー: {e}")
-            print(f"   bbox: ({bbox.x1}, {bbox.y1}, {bbox.x2}, {bbox.y2}), "
-                  f"frame shape: {frame.shape}, margin: {margin}")
+            print(f"\n❌ 画像切り出し・保存エラー:")
+            print(f"   エラー内容: {e}")
+            print(f"   bbox座標: ({bbox.x1}, {bbox.y1}) - ({bbox.x2}, {bbox.y2})")
+            print(f"   フレームサイズ: {frame.shape}")
+            print(f"   マージン: {margin}px")
+            print(f"   💡 ヒント: bounding boxの座標がフレーム範囲外の可能性があります")
             # エラー時は空文字列を返して処理を継続
             return ""
     
@@ -132,7 +145,8 @@ class SessionManager:
             ZIPファイルのPath（圧縮成功時）、失敗時はNone
         """
         if not self.session_folder or not self.session_folder.exists():
-            print("⚠️  セッションフォルダが存在しません")
+            print("\n⚠️  セッションフォルダが存在しません")
+            print("   セッションが開始されていないか、既に削除されています")
             return None
         
         # ZIP圧縮
@@ -154,7 +168,10 @@ class SessionManager:
             
             return zip_path
         except Exception as e:
-            print(f"❌ ZIP圧縮エラー: {e}")
+            print(f"\n❌ ZIP圧縮エラー:")
+            print(f"   エラー内容: {e}")
+            print(f"   セッションフォルダ: {self.session_folder}")
+            print(f"   💡 ヒント: ディスク容量が不足しているか、書き込み権限がない可能性があります")
             return None
     
     def open_session_folder(self) -> None:
@@ -164,13 +181,18 @@ class SessionManager:
         現在のセッションフォルダをmacOSのFinderで開きます。
         """
         if not self.session_folder or not self.session_folder.exists():
-            print("⚠️  セッションフォルダが存在しません")
+            print("\n⚠️  セッションフォルダが存在しません")
+            print("   セッションが開始されていないか、既に削除されています")
             return
         
         try:
             subprocess.run(["open", str(self.session_folder)], check=True)
             print(f"📂 Finderでフォルダを開きました: {self.session_folder}")
         except subprocess.CalledProcessError as e:
-            print(f"❌ Finderでフォルダを開けませんでした: {e}")
+            print(f"\n❌ Finderでフォルダを開けませんでした:")
+            print(f"   エラー内容: {e}")
+            print(f"   💡 ヒント: フォルダが削除されているか、アクセス権限がない可能性があります")
         except FileNotFoundError:
-            print("❌ 'open'コマンドが見つかりません（macOS以外の環境では使用できません）")
+            print("\n❌ 'open'コマンドが見つかりません")
+            print("   このコマンドはmacOS専用です")
+            print("   💡 ヒント: 手動でフォルダを開いてください: " + str(self.session_folder))
