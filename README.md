@@ -286,7 +286,7 @@ python scripts/train_hierarchical_model.py
 source venv/bin/activate
 
 # GUIモードで起動
-python src/gui_app.py
+python -m src.gui_app
 ```
 
 **GUIの機能**:
