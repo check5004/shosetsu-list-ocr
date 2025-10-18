@@ -20,18 +20,20 @@ class OCRProcessor:
     前処理とクリーンアップを行います。
     """
     
-    def __init__(self, lang: str = 'jpn', margin: int = 5, min_bbox_size: int = 20):
+    def __init__(self, lang: str = 'jpn', margin: int = 5, min_bbox_width: int = 15, min_bbox_height: int = 8):
         """
         OCRProcessorを初期化
         
         Args:
             lang: OCR言語コード（デフォルト: 'jpn'）
             margin: 切り出し時のマージン（ピクセル、デフォルト: 5）
-            min_bbox_size: 最小バウンディングボックスサイズ（ピクセル、デフォルト: 20）
+            min_bbox_width: 最小バウンディングボックス幅（ピクセル、デフォルト: 15）
+            min_bbox_height: 最小バウンディングボックス高さ（ピクセル、デフォルト: 8）
         """
         self.lang = lang
         self.margin = margin
-        self.min_bbox_size = min_bbox_size
+        self.min_bbox_width = min_bbox_width
+        self.min_bbox_height = min_bbox_height
         
         # Tesseractの動作確認
         try:
@@ -60,7 +62,8 @@ class OCRProcessor:
             bbox_width = bbox.x2 - bbox.x1
             bbox_height = bbox.y2 - bbox.y1
             
-            if bbox_width < self.min_bbox_size or bbox_height < self.min_bbox_size:
+            if bbox_width < self.min_bbox_width or bbox_height < self.min_bbox_height:
+                print(f"⚠️  バウンディングボックスが小さすぎます: {bbox_width}x{bbox_height} (最小: {self.min_bbox_width}x{self.min_bbox_height})")
                 return ""
             
             # 画像の高さと幅を取得
@@ -88,6 +91,10 @@ class OCRProcessor:
                 config='--psm 6 --oem 3'
             )
             
+            # デバッグ情報（OCR結果が空の場合）
+            if not text or not text.strip():
+                print(f"⚠️  OCR結果が空です: bbox=({bbox.x1}, {bbox.y1}, {bbox.x2}, {bbox.y2}), size={bbox_width}x{bbox_height}")
+            
             # テキストをクリーンアップ
             cleaned_text = self.cleanup_text(text, remove_newlines=remove_newlines)
             
@@ -95,7 +102,8 @@ class OCRProcessor:
             
         except Exception as e:
             # OCR失敗時はエラーをキャッチして空文字列を返す
-            print(f"OCR処理でエラーが発生しました: {e}")
+            print(f"❌ OCR処理でエラーが発生しました: {e}")
+            print(f"   bbox: ({bbox.x1}, {bbox.y1}, {bbox.x2}, {bbox.y2})")
             return ""
 
     @staticmethod

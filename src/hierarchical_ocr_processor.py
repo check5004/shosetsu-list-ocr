@@ -67,7 +67,8 @@ def process_hierarchical_detection(
                       f"{detection_result.x2}, {detection_result.y2})")
                 ocr_texts[element_name] = ''
         else:
-            # 検出されなかった要素は空文字列
+            # 検出されなかった要素は空文字列（デバッグ情報を追加）
+            print(f"  {element_name}: (検出されませんでした)")
             ocr_texts[element_name] = ''
     
     return ocr_texts

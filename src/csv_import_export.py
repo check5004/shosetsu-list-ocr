@@ -193,7 +193,19 @@ class CSVImportExport:
             
             # レコードをインポート
             imported_count = 0
+            skipped_count = 0
+            existing_ids = set()
+            
             for _, row in df.iterrows():
+                # list_item_idの重複チェック
+                list_item_id = str(row['list_item_id'])
+                if list_item_id in existing_ids:
+                    skipped_count += 1
+                    print(f"⚠️  重複スキップ: {list_item_id}")
+                    continue
+                
+                existing_ids.add(list_item_id)
+                
                 # confirmedフィールドの処理（文字列からブール値に変換）
                 confirmed = False
                 if 'confirmed' in row:
@@ -212,7 +224,7 @@ class CSVImportExport:
                 
                 # StructuredRecordを作成
                 record = StructuredRecord(
-                    list_item_id=str(row['list_item_id']),
+                    list_item_id=list_item_id,
                     title=str(row['title']) if pd.notna(row['title']) else '',
                     progress=str(row['progress']) if pd.notna(row['progress']) else '',
                     last_read_date=str(row['last_read_date']) if pd.notna(row['last_read_date']) else '',
@@ -233,6 +245,8 @@ class CSVImportExport:
                 imported_count += 1
             
             success_msg = f"✅ CSVインポート完了: {imported_count}件のレコードをインポートしました"
+            if skipped_count > 0:
+                success_msg += f"（{skipped_count}件の重複をスキップ）"
             print(success_msg)
             
             # 統計情報を表示

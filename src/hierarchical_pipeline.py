@@ -61,7 +61,8 @@ class HierarchicalPipeline:
             self.ocr_processor = OCRProcessor(
                 lang=config.ocr_lang,
                 margin=config.ocr_margin,
-                min_bbox_size=20
+                min_bbox_width=15,
+                min_bbox_height=8
             )
             
             # データマネージャを初期化
