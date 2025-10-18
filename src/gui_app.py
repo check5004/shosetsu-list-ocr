@@ -23,6 +23,7 @@ from src.performance_mode import get_available_modes
 from src.hierarchical_pipeline import HierarchicalPipeline
 from src.session_manager import SessionManager
 from src.visualizer import Visualizer
+from src.data_editor_window import DataEditorWindow
 
 
 class ToolTip:
@@ -106,6 +107,7 @@ class RealtimeOCRGUI:
         self.hierarchical_pipeline: Optional[HierarchicalPipeline] = None
         self.session_manager: Optional[SessionManager] = None
         self.visualizer: Optional[Visualizer] = None
+        self.data_editor_window: Optional[DataEditorWindow] = None
         
         # Statistics
         self.stats = {
@@ -468,6 +470,21 @@ class RealtimeOCRGUI:
                 "list-item画像が保存されているフォルダを開きます。\n"
                 "タイムスタンプ付きのセッションフォルダが格納されている\n"
                 "親ディレクトリが開きます。")
+        
+        # Data editor button (for hierarchical mode)
+        data_editor_frame = ttk.Frame(control_group)
+        data_editor_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        self.data_editor_btn = ttk.Button(data_editor_frame, text="📊 データエディター", 
+                                         command=self._open_data_editor)
+        self.data_editor_btn.pack(side=tk.LEFT, padx=5)
+        
+        editor_hint = ttk.Label(data_editor_frame, text="ℹ️", foreground="cyan", cursor="hand2")
+        editor_hint.pack(side=tk.LEFT)
+        ToolTip(editor_hint,
+                "抽出されたデータを表形式で表示し、\n"
+                "編集・削除・確定・フィルタリングを行えます。\n"
+                "階層的検出モードで処理を開始した後に使用できます。")
         
         # Status
         status_frame = ttk.Frame(control_group)
@@ -970,6 +987,32 @@ class RealtimeOCRGUI:
         except Exception as e:
             messagebox.showerror("エラー", f"フォルダを開けませんでした: {str(e)}")
     
+    def _open_data_editor(self):
+        """データエディターを開く"""
+        # データマネージャーが存在するか確認
+        if not self.data_manager:
+            messagebox.showwarning("警告", "先に階層的検出モードで処理を開始してください")
+            return
+        
+        # 階層的データマネージャーかどうか確認
+        from src.hierarchical_data_manager import HierarchicalDataManager
+        if not isinstance(self.data_manager, HierarchicalDataManager):
+            messagebox.showwarning("警告", "データエディターは階層的検出モードでのみ使用できます")
+            return
+        
+        # 既に開いている場合はフォーカス
+        if self.data_editor_window and self.data_editor_window.window.winfo_exists():
+            self.data_editor_window.window.lift()
+            self.data_editor_window.window.focus_force()
+        else:
+            # 新規作成
+            try:
+                self.data_editor_window = DataEditorWindow(self.root, self.data_manager)
+                self.log_queue.put(("データエディターを開きました", 'info'))
+            except Exception as e:
+                messagebox.showerror("エラー", f"データエディターを開けませんでした: {str(e)}")
+                self.log_queue.put((f"データエディターエラー: {str(e)}", 'error'))
+    
     def _on_new_text_detected(self, text: str):
         """新規テキスト検出時のコールバック
         
@@ -1217,6 +1260,14 @@ class RealtimeOCRGUI:
         else:
             # パイプラインプロセッサが無い場合は従来のFPS計算
             self.fps_var.set(f"{self.stats['fps']:.1f}")
+        
+        # データエディターが開いている場合、リアルタイムで同期
+        if self.data_editor_window and self.data_editor_window.window.winfo_exists():
+            try:
+                self.data_editor_window.refresh_table()
+            except Exception as e:
+                # エラーが発生した場合は無視（ウィンドウが閉じられた可能性）
+                pass
         
         self.root.after(1000, self._update_stats)
     
