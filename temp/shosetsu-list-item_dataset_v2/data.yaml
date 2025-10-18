@@ -1,0 +1,20 @@
+# YOLOv8 Dataset Configuration for Hierarchical Detection
+# 階層的検出用データセット設定
+
+# Dataset root path (absolute path from workspace root)
+path: temp/shosetsu-list-item_dataset_v2
+
+# Training and validation data paths (relative to 'path')
+train: obj_train_data
+val: obj_train_data  # Using same data for validation due to small dataset size
+
+# Number of classes
+nc: 5
+
+# Class names (must match the order in annotation files)
+names:
+  0: list-item
+  1: title
+  2: progress
+  3: last_read_date
+  4: site_name

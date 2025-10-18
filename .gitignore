@@ -72,7 +72,10 @@ output/sessions/
 *.zip
 models/*.pt
 !models/.gitkeep
-temp/
+temp/*
+!temp/shosetsu-list-item_dataset_v2/
+!temp/*dataset*/
+!temp/iPhoneアプリ読書記録OCR化＆データ移行手順書 (リアルタイム版).md
 logs/
 *.log
 

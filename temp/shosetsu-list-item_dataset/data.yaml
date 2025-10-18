@@ -1,0 +1,16 @@
+# YOLOv8 Dataset Configuration
+# 小説リストアイテム検出用データセット
+
+# データセットのルートパス（絶対パスまたは相対パス）
+path: temp/shosetsu-list-item_dataset
+
+# トレーニングデータとバリデーションデータのパス
+train: obj_train_data
+val: obj_train_data  # 小規模データセットのため、trainと同じを使用
+
+# クラス数
+nc: 1
+
+# クラス名
+names:
+  0: list-item
