@@ -33,7 +33,7 @@ class AppConfig:
         display_queue_max_size: Maximum size for display queue
         hierarchical_model_path: Path to the hierarchical detection model (5 classes)
         use_hierarchical_detection: Enable hierarchical detection mode
-        iou_threshold: IoU threshold for parent-child relationship determination (0.0-1.0)
+        containment_threshold: Containment ratio threshold for parent-child relationship (0.0-1.0)
         similarity_threshold: Text similarity threshold for duplicate detection (0.0-1.0)
         session_output_dir: Directory for session-based image output
         hierarchical_csv_output: Path to the hierarchical detection CSV output file
@@ -68,7 +68,7 @@ class AppConfig:
     # Hierarchical detection settings
     hierarchical_model_path: str = "models/hierarchical_best.pt"
     use_hierarchical_detection: bool = False
-    iou_threshold: float = 0.5
+    containment_threshold: float = 0.7  # 子要素の70%以上が親要素に含まれている場合に紐付ける
     similarity_threshold: float = 0.75
     session_output_dir: str = "output/sessions"
     hierarchical_csv_output: str = "output/hierarchical_data.csv"
@@ -160,9 +160,9 @@ class AppConfig:
             if not Path(self.hierarchical_model_path).is_file():
                 return False, f"Hierarchical model path is not a file: {self.hierarchical_model_path}"
         
-        # Validate IoU threshold
-        if not 0.0 <= self.iou_threshold <= 1.0:
-            return False, f"iou_threshold must be between 0.0 and 1.0, got {self.iou_threshold}"
+        # Validate containment threshold
+        if not 0.0 <= self.containment_threshold <= 1.0:
+            return False, f"containment_threshold must be between 0.0 and 1.0, got {self.containment_threshold}"
         
         # Validate similarity threshold
         if not 0.0 <= self.similarity_threshold <= 1.0:
@@ -208,7 +208,7 @@ class AppConfig:
             OCR_DISPLAY_QUEUE_MAX_SIZE: Maximum display queue size
             OCR_HIERARCHICAL_MODEL_PATH: Path to hierarchical detection model
             OCR_USE_HIERARCHICAL_DETECTION: Enable hierarchical detection mode (true/false)
-            OCR_IOU_THRESHOLD: IoU threshold for parent-child relationship
+            OCR_CONTAINMENT_THRESHOLD: Containment ratio threshold for parent-child relationship
             OCR_SIMILARITY_THRESHOLD: Text similarity threshold for duplicate detection
             OCR_SESSION_OUTPUT_DIR: Directory for session-based image output
             OCR_HIERARCHICAL_CSV_OUTPUT: Path to hierarchical detection CSV output
@@ -236,7 +236,7 @@ class AppConfig:
             display_queue_max_size=int(os.getenv('OCR_DISPLAY_QUEUE_MAX_SIZE', str(defaults.display_queue_max_size))),
             hierarchical_model_path=os.getenv('OCR_HIERARCHICAL_MODEL_PATH', defaults.hierarchical_model_path),
             use_hierarchical_detection=os.getenv('OCR_USE_HIERARCHICAL_DETECTION', str(defaults.use_hierarchical_detection)).lower() in ('true', '1', 'yes'),
-            iou_threshold=float(os.getenv('OCR_IOU_THRESHOLD', str(defaults.iou_threshold))),
+            containment_threshold=float(os.getenv('OCR_CONTAINMENT_THRESHOLD', str(defaults.containment_threshold))),
             similarity_threshold=float(os.getenv('OCR_SIMILARITY_THRESHOLD', str(defaults.similarity_threshold))),
             session_output_dir=os.getenv('OCR_SESSION_OUTPUT_DIR', defaults.session_output_dir),
             hierarchical_csv_output=os.getenv('OCR_HIERARCHICAL_CSV_OUTPUT', defaults.hierarchical_csv_output),
@@ -262,7 +262,7 @@ class AppConfig:
             f"  display_queue_max_size={self.display_queue_max_size},\n"
             f"  hierarchical_model_path='{self.hierarchical_model_path}',\n"
             f"  use_hierarchical_detection={self.use_hierarchical_detection},\n"
-            f"  iou_threshold={self.iou_threshold},\n"
+            f"  containment_threshold={self.containment_threshold},\n"
             f"  similarity_threshold={self.similarity_threshold},\n"
             f"  session_output_dir='{self.session_output_dir}',\n"
             f"  hierarchical_csv_output='{self.hierarchical_csv_output}'\n"

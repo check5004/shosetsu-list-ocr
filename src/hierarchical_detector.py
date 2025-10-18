@@ -13,7 +13,7 @@ import torch
 from ultralytics import YOLO
 
 from src.object_detector import DetectionResult
-from src.iou_calculator import calculate_iou
+from src.iou_calculator import calculate_containment_ratio
 
 
 @dataclass
@@ -100,7 +100,7 @@ class HierarchicalDetector:
         self,
         model_path: str,
         confidence_threshold: float = 0.6,
-        iou_threshold: float = 0.5
+        containment_threshold: float = 0.7
     ):
         """
         HierarchicalDetectorを初期化
@@ -108,7 +108,8 @@ class HierarchicalDetector:
         Args:
             model_path: 5クラス学習済みYOLOv8モデルファイルのパス
             confidence_threshold: 検出の信頼度しきい値（デフォルト: 0.6）
-            iou_threshold: 親子関係判定のIoUしきい値（デフォルト: 0.5）
+            containment_threshold: 親子関係判定の包含率しきい値（デフォルト: 0.7）
+                                  子要素の70%以上が親要素に含まれている場合に紐付ける
         
         Raises:
             FileNotFoundError: モデルファイルが存在しない場合
@@ -116,7 +117,7 @@ class HierarchicalDetector:
         """
         self.model_path = Path(model_path)
         self.confidence_threshold = confidence_threshold
-        self.iou_threshold = iou_threshold
+        self.containment_threshold = containment_threshold
         
         # 5クラスの定義
         self.class_names = [
@@ -273,21 +274,21 @@ class HierarchicalDetector:
                 best_parent_idx = -1
                 best_iou = 0.0
                 
-                # すべてのlist-itemとのIoUを計算
+                # すべてのlist-itemとの包含率を計算
                 for idx, list_item in enumerate(list_items):
                     try:
-                        iou = calculate_iou(list_item, child)
+                        containment_ratio = calculate_containment_ratio(list_item, child)
                         
-                        # IoUがしきい値以上で、かつ最大の場合
-                        if iou >= self.iou_threshold and iou > best_iou:
-                            best_iou = iou
+                        # 包含率がしきい値以上で、かつ最大の場合
+                        if containment_ratio >= self.containment_threshold and containment_ratio > best_iou:
+                            best_iou = containment_ratio
                             best_parent_idx = idx
                     except Exception as e:
-                        # IoU計算エラー時はデフォルト値（0.0）を使用して処理を継続
-                        print(f"⚠️  IoU計算エラー（デフォルト値0.0を使用）: {e}")
+                        # 包含率計算エラー時はデフォルト値（0.0）を使用して処理を継続
+                        print(f"⚠️  包含率計算エラー（デフォルト値0.0を使用）: {e}")
                         print(f"   list_item bbox: ({list_item.x1}, {list_item.y1}, {list_item.x2}, {list_item.y2})")
                         print(f"   child bbox: ({child.x1}, {child.y1}, {child.x2}, {child.y2})")
-                        # デフォルト値0.0を使用（何もしない = IoU=0として扱う）
+                        # デフォルト値0.0を使用（何もしない = 包含率=0として扱う）
                         continue
                 
                 # 最適な親が見つかった場合、子要素を割り当て
@@ -304,8 +305,8 @@ class HierarchicalDetector:
                     print(f"⚠️  孤立した{child_class}要素を検出:")
                     print(f"   - 信頼度: {child.confidence:.2f}")
                     print(f"   - 位置: ({child.x1}, {child.y1}) - ({child.x2}, {child.y2})")
-                    print(f"   - 原因: IoUしきい値({self.iou_threshold})以上のlist-itemが見つかりませんでした")
-                    print(f"   - 対策: IoUしきい値を下げる、またはアノテーションを見直してください")
+                    print(f"   - 原因: 包含率しきい値({self.containment_threshold})以上のlist-itemが見つかりませんでした")
+                    print(f"   - 対策: 包含率しきい値を下げる、またはアノテーションを見直してください")
         
         # 孤立した子要素の統計を出力
         total_orphaned = 0
@@ -322,7 +323,7 @@ class HierarchicalDetector:
         
         if total_orphaned > 0:
             print(f"\n💡 ヒント: 孤立要素が多い場合は以下を確認してください:")
-            print(f"   - IoUしきい値を下げる（現在: {self.iou_threshold}）")
+            print(f"   - 包含率しきい値を下げる（現在: {self.containment_threshold}）")
             print(f"   - アノテーションの精度を確認する")
             print(f"   - list-itemの検出精度を向上させる")
         

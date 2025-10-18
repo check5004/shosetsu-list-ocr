@@ -54,7 +54,7 @@ class HierarchicalPipeline:
             self.detector = HierarchicalDetector(
                 model_path=config.hierarchical_model_path,
                 confidence_threshold=config.confidence_threshold,
-                iou_threshold=config.iou_threshold
+                containment_threshold=config.containment_threshold
             )
             
             # OCRプロセッサを初期化
