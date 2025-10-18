@@ -71,6 +71,8 @@ output/sessions/
 *.csv
 *.zip
 models/*.pt
+!models/best.pt
+!models/hierarchical_best.pt
 !models/.gitkeep
 temp/*
 !temp/shosetsu-list-item_dataset_v2/
