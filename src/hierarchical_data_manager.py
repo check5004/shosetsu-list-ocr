@@ -6,9 +6,10 @@
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 from difflib import SequenceMatcher
+from datetime import datetime
 import pandas as pd
 
 from src.hierarchical_detector import HierarchicalDetectionResult
@@ -29,6 +30,8 @@ class StructuredRecord:
         site_name: サイト名テキスト
         image_path: 切り出し画像の相対パス
         error_status: エラーステータス（"OK"または欠損フィールド名）
+        confirmed: 確認済みフラグ（ユーザーが確認済みとしてロックしたか）
+        confirmed_at: 確認日時（ISO 8601形式、例: "2024-12-01T12:30:00"）
     """
     list_item_id: str
     title: str
@@ -37,6 +40,8 @@ class StructuredRecord:
     site_name: str
     image_path: str
     error_status: str
+    confirmed: bool = False
+    confirmed_at: Optional[str] = None
 
 
 class HierarchicalDataManager:
@@ -162,7 +167,7 @@ class HierarchicalDataManager:
         
         pandasを使用してDataFrameを作成し、UTF-8エンコーディングで
         CSVファイルに出力します。出力後、統計情報（総件数、正常件数、
-        エラー件数）をターミナルに表示します。
+        エラー件数、確定済み件数）をターミナルに表示します。
         
         CSV列:
             - list_item_id: list-itemの一意識別子
@@ -172,6 +177,8 @@ class HierarchicalDataManager:
             - site_name: サイト名テキスト
             - image_path: 切り出し画像の相対パス
             - error_status: エラーステータス（"OK"または欠損フィールド名）
+            - confirmed: 確認済みフラグ
+            - confirmed_at: 確認日時（ISO 8601形式）
         """
         if not self.records:
             print("⚠️  出力するデータがありません")
@@ -187,19 +194,20 @@ class HierarchicalDataManager:
         df.to_csv(self.output_path, index=False, encoding='utf-8')
         
         # 統計情報を計算
-        total = len(self.records)
+        stats = self.get_statistics()
         success = len([r for r in self.records if r.error_status == "OK"])
-        errors = total - success
         
         # 統計情報を表示
         print(f"\n✅ CSV出力完了: {self.output_path}")
         print(f"📊 統計情報:")
-        print(f"   - 総件数: {total}")
+        print(f"   - 総件数: {stats['total']}")
         print(f"   - 正常: {success}")
-        print(f"   - エラー: {errors}")
+        print(f"   - エラー: {stats['error']}")
+        print(f"   - 確定済み: {stats['confirmed']}")
+        print(f"   - 未確認: {stats['unconfirmed']}")
         
         # エラーの内訳を表示
-        if errors > 0:
+        if stats['error'] > 0:
             error_types = {}
             for record in self.records:
                 if record.error_status != "OK":
@@ -208,3 +216,186 @@ class HierarchicalDataManager:
             print(f"   エラー内訳:")
             for error_type, count in error_types.items():
                 print(f"     - {error_type}: {count}件")
+
+    
+    def confirm_record(self, list_item_id: str) -> None:
+        """
+        レコードを確定
+        
+        指定されたlist_item_idのレコードを確認済みとしてマークし、
+        確認日時を記録します。確定されたレコードは編集・削除から
+        保護されます。
+        
+        Args:
+            list_item_id: 確定するレコードのID
+        
+        Raises:
+            ValueError: 指定されたIDのレコードが存在しない場合
+        """
+        for record in self.records:
+            if record.list_item_id == list_item_id:
+                record.confirmed = True
+                record.confirmed_at = datetime.now().isoformat()
+                print(f"✅ レコード確定: {record.title} (ID: {list_item_id})")
+                return
+        
+        raise ValueError(f"レコードが見つかりません: {list_item_id}")
+
+    
+    def unconfirm_record(self, list_item_id: str) -> None:
+        """
+        レコードの確定を解除
+        
+        指定されたlist_item_idのレコードの確認済みフラグを解除し、
+        編集・削除を可能にします。
+        
+        Args:
+            list_item_id: 解除するレコードのID
+        
+        Raises:
+            ValueError: 指定されたIDのレコードが存在しない場合
+        """
+        for record in self.records:
+            if record.list_item_id == list_item_id:
+                record.confirmed = False
+                record.confirmed_at = None
+                print(f"🔓 レコード確定解除: {record.title} (ID: {list_item_id})")
+                return
+        
+        raise ValueError(f"レコードが見つかりません: {list_item_id}")
+
+    
+    def find_similar_records(
+        self,
+        title: str,
+        threshold: Optional[float] = None
+    ) -> List[Tuple[StructuredRecord, float]]:
+        """
+        類似レコードを検索
+        
+        指定されたタイトルと類似度の高いレコードを検索します。
+        SequenceMatcherを使用して文字列類似度を計算し、
+        しきい値以上の類似度を持つレコードを返します。
+        
+        Args:
+            title: 検索するタイトル
+            threshold: 類似度しきい値（Noneの場合はインスタンスのデフォルト値を使用）
+        
+        Returns:
+            (レコード, 類似度)のタプルのリスト（類似度の降順でソート）
+        """
+        if not title:
+            return []
+        
+        # しきい値が指定されていない場合はデフォルト値を使用
+        if threshold is None:
+            threshold = self.similarity_threshold
+        
+        similar_records = []
+        
+        for record in self.records:
+            if not record.title:
+                continue
+            
+            # 類似度を計算
+            similarity = SequenceMatcher(None, title, record.title).ratio()
+            
+            # しきい値以上の場合、リストに追加
+            if similarity >= threshold:
+                similar_records.append((record, similarity))
+        
+        # 類似度の降順でソート
+        similar_records.sort(key=lambda x: x[1], reverse=True)
+        
+        return similar_records
+
+    
+    def update_record(self, list_item_id: str, **kwargs) -> None:
+        """
+        レコードを更新
+        
+        指定されたlist_item_idのレコードの任意のフィールドを更新します。
+        
+        Args:
+            list_item_id: 更新するレコードのID
+            **kwargs: 更新するフィールドと値
+                     (例: title="新しいタイトル", progress="50%")
+        
+        Raises:
+            ValueError: 指定されたIDのレコードが存在しない場合、
+                       または無効なフィールド名が指定された場合
+        """
+        for record in self.records:
+            if record.list_item_id == list_item_id:
+                # 有効なフィールドのみ更新
+                valid_fields = {
+                    'title', 'progress', 'last_read_date', 'site_name',
+                    'image_path', 'error_status', 'confirmed', 'confirmed_at'
+                }
+                
+                for field, value in kwargs.items():
+                    if field not in valid_fields:
+                        raise ValueError(f"無効なフィールド名: {field}")
+                    
+                    setattr(record, field, value)
+                
+                print(f"📝 レコード更新: {record.title} (ID: {list_item_id})")
+                return
+        
+        raise ValueError(f"レコードが見つかりません: {list_item_id}")
+
+    
+    def delete_records(self, list_item_ids: List[str]) -> None:
+        """
+        複数レコードを一括削除
+        
+        指定されたlist_item_idのリストに対応するレコードを削除します。
+        削除されたレコードのタイトルもtitlesリストから削除されます。
+        
+        Args:
+            list_item_ids: 削除するレコードのIDリスト
+        """
+        deleted_count = 0
+        
+        for list_item_id in list_item_ids:
+            # レコードを検索して削除
+            for i, record in enumerate(self.records):
+                if record.list_item_id == list_item_id:
+                    # タイトルリストからも削除
+                    if record.title in self.titles:
+                        self.titles.remove(record.title)
+                    
+                    # レコードを削除
+                    deleted_record = self.records.pop(i)
+                    deleted_count += 1
+                    print(f"🗑️  レコード削除: {deleted_record.title} (ID: {list_item_id})")
+                    break
+        
+        if deleted_count > 0:
+            print(f"✅ {deleted_count}件のレコードを削除しました")
+
+    
+    def get_statistics(self) -> Dict[str, int]:
+        """
+        統計情報を取得
+        
+        レコードの統計情報を計算して返します。
+        
+        Returns:
+            統計情報の辞書:
+                - total: 総レコード数
+                - confirmed: 確定済みレコード数
+                - error: エラーのあるレコード数
+                - unconfirmed: 未確認レコード数
+        """
+        total = len(self.records)
+        confirmed = len([r for r in self.records if r.confirmed])
+        error = len([r for r in self.records if r.error_status != "OK"])
+        unconfirmed = len([r for r in self.records if not r.confirmed])
+        
+        return {
+            'total': total,
+            'confirmed': confirmed,
+            'error': error,
+            'unconfirmed': unconfirmed
+        }

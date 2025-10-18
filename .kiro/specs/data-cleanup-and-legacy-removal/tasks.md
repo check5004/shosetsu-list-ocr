@@ -8,39 +8,39 @@
   - `src/hierarchical_ocr_processor.py`で title フィールドの OCR 時に`remove_newlines=True`を指定
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 2. HierarchicalDataManager の拡張
-- [ ] 2.1 StructuredRecord データクラスの拡張
+- [x] 2. HierarchicalDataManager の拡張
+- [x] 2.1 StructuredRecord データクラスの拡張
 
   - `src/hierarchical_data_manager.py`の`StructuredRecord`に`confirmed`と`confirmed_at`フィールドを追加
   - デフォルト値を設定（`confirmed=False`, `confirmed_at=None`）
   - _Requirements: 6.1, 6.10_
 
-- [ ] 2.2 レコード確認機能の実装
+- [x] 2.2 レコード確認機能の実装
 
   - `confirm_record()`メソッドを実装（レコードを確定し、タイムスタンプを記録）
   - `unconfirm_record()`メソッドを実装（確定を解除）
   - _Requirements: 6.2, 6.9_
 
-- [ ] 2.3 類似レコード検索機能の実装
+- [x] 2.3 類似レコード検索機能の実装
 
   - `find_similar_records()`メソッドを実装
   - 指定されたタイトルと類似度の高いレコードを検索
   - 類似度とともにレコードのリストを返す
   - _Requirements: 6.3_
 
-- [ ] 2.4 レコード更新・削除機能の実装
+- [x] 2.4 レコード更新・削除機能の実装
 
   - `update_record()`メソッドを実装（任意のフィールドを更新）
   - `delete_records()`メソッドを実装（複数レコードを一括削除）
   - _Requirements: 4.2, 5.3_
 
-- [ ] 2.5 統計情報取得機能の実装
+- [x] 2.5 統計情報取得機能の実装
 
   - `get_statistics()`メソッドを実装
   - 総レコード数、確定済み数、エラー数、未確認数を返す
   - _Requirements: 11.3_
 
-- [ ] 2.6 CSV 出力に確認ステータスを追加
+- [x] 2.6 CSV 出力に確認ステータスを追加
 
   - `export_to_csv()`メソッドを更新
   - `confirmed`と`confirmed_at`列を CSV 出力に含める
