@@ -11,12 +11,20 @@ from typing import List, Optional, Callable
 from src.hierarchical_data_manager import HierarchicalDataManager, StructuredRecord
 
 
-# 行の背景色定義
+# 行の背景色定義（ダークモード対応）
 COLORS = {
-    'confirmed': '#d4edda',      # 緑系（確定済み）
-    'error': '#f8d7da',          # 赤系（エラー）
-    'unconfirmed': '#fff3cd',    # 黄系（未確認）
-    'normal': '#ffffff'          # 白（通常）
+    'confirmed': '#2d4a2d',      # 暗い緑系（確定済み）
+    'error': '#4a2d2d',          # 暗い赤系（エラー）
+    'unconfirmed': '#4a4a2d',    # 暗い黄系（未確認）
+    'normal': '#2b2b2b'          # ダークグレー（通常）
+}
+
+# テキスト色定義（ダークモード対応）
+TEXT_COLORS = {
+    'confirmed': '#90ee90',      # 明るい緑（確定済み）
+    'error': '#ff6b6b',          # 明るい赤（エラー）
+    'unconfirmed': '#ffd700',    # 明るい黄色（未確認）
+    'normal': '#e0e0e0'          # 明るいグレー（通常）
 }
 
 
@@ -83,6 +91,26 @@ class RecordTableManager:
             'error_status',
             'actions'
         )
+        
+        # ダークモード用のスタイルを設定
+        style = ttk.Style()
+        style.theme_use('default')
+        
+        # Treeviewのスタイルを設定
+        style.configure(
+            "Treeview",
+            background=COLORS['normal'],
+            foreground=TEXT_COLORS['normal'],
+            fieldbackground=COLORS['normal'],
+            borderwidth=0
+        )
+        style.configure(
+            "Treeview.Heading",
+            background="#1e1e1e",
+            foreground="#e0e0e0",
+            borderwidth=1
+        )
+        style.map('Treeview', background=[('selected', '#404040')])
         
         # Treeviewを作成
         self.tree = ttk.Treeview(
@@ -675,9 +703,9 @@ class RecordTableManager:
         if self.tree is None:
             return
         
-        self.tree.tag_configure('confirmed', background=COLORS['confirmed'])
-        self.tree.tag_configure('error', background=COLORS['error'])
-        self.tree.tag_configure('unconfirmed', background=COLORS['unconfirmed'])
-        self.tree.tag_configure('normal', background=COLORS['normal'])
+        self.tree.tag_configure('confirmed', background=COLORS['confirmed'], foreground=TEXT_COLORS['confirmed'])
+        self.tree.tag_configure('error', background=COLORS['error'], foreground=TEXT_COLORS['error'])
+        self.tree.tag_configure('unconfirmed', background=COLORS['unconfirmed'], foreground=TEXT_COLORS['unconfirmed'])
+        self.tree.tag_configure('normal', background=COLORS['normal'], foreground=TEXT_COLORS['normal'])
         
         print("行スタイリング設定完了")

@@ -104,6 +104,7 @@ class CSVImportExport:
         CSV形式を検証
         
         読み込んだDataFrameが必須列を持ち、データ型が正しいかを検証します。
+        必要に応じてデータ型を文字列に変換します。
         
         Args:
             df: 読み込んだDataFrame
@@ -122,30 +123,29 @@ class CSVImportExport:
             error_msg = f"必須列が不足しています: {', '.join(missing_columns)}"
             return False, error_msg
         
-        # データ型の検証
+        # データ型の変換（検証ではなく変換に変更）
         try:
-            # list_item_idは文字列型
-            if not df['list_item_id'].dtype == 'object':
-                return False, "list_item_idは文字列型である必要があります"
-            
-            # title, progress, last_read_date, site_name, image_path, error_statusは文字列型
-            string_columns = ['title', 'progress', 'last_read_date', 'site_name', 'image_path', 'error_status']
+            # 文字列型に変換すべき列
+            string_columns = ['list_item_id', 'title', 'progress', 'last_read_date', 'site_name', 'image_path', 'error_status']
             for col in string_columns:
-                if not df[col].dtype == 'object':
-                    return False, f"{col}は文字列型である必要があります"
+                # NaNを空文字列に変換してから文字列型に変換
+                df[col] = df[col].fillna('').astype(str)
             
-            # confirmedがある場合はブール型または文字列型（"True"/"False"）
+            # confirmedがある場合はブール型に変換
             if 'confirmed' in df.columns:
-                if df['confirmed'].dtype not in ['object', 'bool']:
-                    return False, "confirmedはブール型または文字列型である必要があります"
+                # 文字列の"True"/"False"やブール値を適切に変換
+                df['confirmed'] = df['confirmed'].fillna(False)
+                if df['confirmed'].dtype == 'object':
+                    df['confirmed'] = df['confirmed'].map(lambda x: str(x).lower() == 'true' if isinstance(x, str) else bool(x))
             
-            # confirmed_atがある場合は文字列型またはNone
+            # confirmed_atがある場合は文字列型に変換
             if 'confirmed_at' in df.columns:
-                if not df['confirmed_at'].dtype == 'object':
-                    return False, "confirmed_atは文字列型である必要があります"
+                df['confirmed_at'] = df['confirmed_at'].fillna('').astype(str)
+                # 空文字列をNoneに変換
+                df['confirmed_at'] = df['confirmed_at'].replace('', None)
             
         except Exception as e:
-            return False, f"データ型検証エラー: {e}"
+            return False, f"データ型変換エラー: {e}"
         
         # レコード数の確認
         if len(df) == 0:
@@ -173,10 +173,10 @@ class CSVImportExport:
             if not input_path.exists():
                 return False, f"ファイルが見つかりません: {filepath}"
             
-            # CSVを読み込み
-            df = pd.read_csv(input_path, encoding='utf-8')
+            # CSVを読み込み（すべての列を文字列として読み込む）
+            df = pd.read_csv(input_path, encoding='utf-8', dtype=str, keep_default_na=False)
             
-            # CSV形式を検証
+            # CSV形式を検証（データ型変換も実行）
             is_valid, error_msg = self.validate_csv_format(df)
             if not is_valid:
                 return False, f"CSV形式エラー: {error_msg}"

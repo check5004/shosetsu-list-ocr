@@ -989,16 +989,47 @@ class RealtimeOCRGUI:
     
     def _open_data_editor(self):
         """データエディターを開く"""
-        # データマネージャーが存在するか確認
-        if not self.data_manager:
-            messagebox.showwarning("警告", "先に階層的検出モードで処理を開始してください")
-            return
-        
-        # 階層的データマネージャーかどうか確認
         from src.hierarchical_data_manager import HierarchicalDataManager
-        if not isinstance(self.data_manager, HierarchicalDataManager):
-            messagebox.showwarning("警告", "データエディターは階層的検出モードでのみ使用できます")
-            return
+        from src.csv_import_export import CSVImportExport
+        
+        # データマネージャーが存在しない場合、CSVから読み込みを試みる
+        if not self.data_manager or not isinstance(self.data_manager, HierarchicalDataManager):
+            # CSVファイルが存在するか確認
+            csv_path = Path(self.config.hierarchical_csv_output)
+            if csv_path.exists():
+                # 一時的なデータマネージャーを作成してCSVを読み込む
+                try:
+                    temp_data_manager = HierarchicalDataManager(
+                        output_path=str(csv_path),
+                        similarity_threshold=self.config.similarity_threshold
+                    )
+                    csv_handler = CSVImportExport(temp_data_manager)
+                    success, message = csv_handler.import_from_csv(str(csv_path), overwrite=True)
+                    
+                    if not success:
+                        messagebox.showerror("エラー", f"CSVの読み込みに失敗しました: {message}")
+                        return
+                    
+                    # データエディターを開く
+                    if self.data_editor_window and self.data_editor_window.window.winfo_exists():
+                        self.data_editor_window.window.lift()
+                        self.data_editor_window.window.focus_force()
+                    else:
+                        self.data_editor_window = DataEditorWindow(self.root, temp_data_manager)
+                        self.log_queue.put((f"CSVからデータを読み込みました: {csv_path}", 'info'))
+                    return
+                except Exception as e:
+                    messagebox.showerror("エラー", f"CSVの読み込みに失敗しました: {str(e)}")
+                    return
+            else:
+                messagebox.showwarning(
+                    "警告", 
+                    f"データがありません。\n\n"
+                    f"以下のいずれかを実行してください：\n"
+                    f"1. 階層的検出モードで処理を開始\n"
+                    f"2. 既存のCSVファイルを配置: {csv_path}"
+                )
+                return
         
         # 既に開いている場合はフォーカス
         if self.data_editor_window and self.data_editor_window.window.winfo_exists():

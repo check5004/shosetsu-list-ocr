@@ -61,6 +61,9 @@ class DataEditorWindow:
         self.window.title("📊 データエディター")
         self.window.geometry("1200x700")
         
+        # ダークモード対応の背景色を設定
+        self.window.configure(bg='#2b2b2b')
+        
         # コンポーネントの初期化
         self.table_manager = RecordTableManager(self.window, data_manager)
         self.csv_handler = CSVImportExport(data_manager)
