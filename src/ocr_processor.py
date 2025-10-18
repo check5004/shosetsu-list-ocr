@@ -154,10 +154,11 @@ class OCRProcessor:
         
         return text
 
+
     @staticmethod
     def preprocess_image(image: np.ndarray) -> np.ndarray:
         """
-        OCR精度向上のための画像前処理
+        OCR精度向上のための画像前処理（汎用版）
         
         グレースケール変換とコントラスト調整を行います。
         

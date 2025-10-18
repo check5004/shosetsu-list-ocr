@@ -56,6 +56,7 @@ class RecordTableManager:
         # コールバック関数（外部から設定可能）
         self.on_confirm_callback: Optional[Callable[[str], None]] = None
         self.on_delete_callback: Optional[Callable[[str], None]] = None
+        self.on_ocr_rerun_callback: Optional[Callable[[str], None]] = None
         
         print("RecordTableManager初期化完了")
 
@@ -92,32 +93,32 @@ class RecordTableManager:
             'actions'
         )
         
-        # ダークモード用のスタイルを設定
+        # ダークモード用のスタイルを設定（カスタムスタイル名を使用）
         style = ttk.Style()
-        style.theme_use('default')
         
-        # Treeviewのスタイルを設定
+        # カスタムTreeviewスタイルを作成（既存のスタイルに影響を与えない）
         style.configure(
-            "Treeview",
+            "Dark.Treeview",
             background=COLORS['normal'],
             foreground=TEXT_COLORS['normal'],
             fieldbackground=COLORS['normal'],
             borderwidth=0
         )
         style.configure(
-            "Treeview.Heading",
+            "Dark.Treeview.Heading",
             background="#1e1e1e",
             foreground="#e0e0e0",
             borderwidth=1
         )
-        style.map('Treeview', background=[('selected', '#404040')])
+        style.map('Dark.Treeview', background=[('selected', '#404040')])
         
-        # Treeviewを作成
+        # Treeviewを作成（カスタムスタイルを適用）
         self.tree = ttk.Treeview(
             frame,
             columns=columns,
             show='headings',
-            selectmode='extended'  # 複数選択を許可
+            selectmode='extended',  # 複数選択を許可
+            style="Dark.Treeview"
         )
         
         # 列ヘッダーを設定
@@ -295,7 +296,11 @@ class RecordTableManager:
         error_display = 'OK' if record.error_status == 'OK' else record.error_status
         
         # アクションボタンの表示（テキストのみ）
-        actions = '編集 | 削除 | 確定'
+        actions = '編集 | 削除 | 確定 | OCR再実行'
+        
+        # 既存のアイテムがある場合は削除
+        if self.tree.exists(record.list_item_id):
+            self.tree.delete(record.list_item_id)
         
         # 行を挿入
         item_id = self.tree.insert(
@@ -460,15 +465,20 @@ class RecordTableManager:
         """
         アクション列のクリック処理
         
-        クリック位置に応じて、編集・削除・確定のいずれかを実行します。
+        クリック位置に応じて、編集・削除・確定・OCR再実行のいずれかを実行します。
         
         Args:
             item_id: アイテムID
             event: クリックイベント
         """
-        # 簡易的な実装: 列全体のクリックで確定を実行
-        # より詳細な実装は後で追加可能
-        self.on_confirm_click(item_id)
+        # 簡易的な実装: ポップアップメニューを表示
+        menu = tk.Menu(self.tree, tearoff=0)
+        menu.add_command(label="削除", command=lambda: self.on_delete_click(item_id))
+        menu.add_command(label="確定/解除", command=lambda: self.on_confirm_click(item_id))
+        menu.add_separator()
+        menu.add_command(label="OCR再実行", command=lambda: self._on_ocr_rerun_click(item_id))
+        
+        menu.post(event.x_root, event.y_root)
     
     def _get_record_by_id(self, list_item_id: str) -> Optional[StructuredRecord]:
         """
@@ -709,3 +719,15 @@ class RecordTableManager:
         self.tree.tag_configure('normal', background=COLORS['normal'], foreground=TEXT_COLORS['normal'])
         
         print("行スタイリング設定完了")
+
+    def _on_ocr_rerun_click(self, item_id: str) -> None:
+        """
+        OCR再実行ボタンクリック処理
+        
+        Args:
+            item_id: アイテムID
+        """
+        if self.on_ocr_rerun_callback:
+            self.on_ocr_rerun_callback(item_id)
+        else:
+            print("⚠️  OCR再実行コールバックが設定されていません")

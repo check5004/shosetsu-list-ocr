@@ -1015,7 +1015,7 @@ class RealtimeOCRGUI:
                         self.data_editor_window.window.lift()
                         self.data_editor_window.window.focus_force()
                     else:
-                        self.data_editor_window = DataEditorWindow(self.root, temp_data_manager)
+                        self.data_editor_window = DataEditorWindow(self.root, temp_data_manager, self.config)
                         self.log_queue.put((f"CSVからデータを読み込みました: {csv_path}", 'info'))
                     return
                 except Exception as e:
@@ -1038,7 +1038,7 @@ class RealtimeOCRGUI:
         else:
             # 新規作成
             try:
-                self.data_editor_window = DataEditorWindow(self.root, self.data_manager)
+                self.data_editor_window = DataEditorWindow(self.root, self.data_manager, self.config)
                 self.log_queue.put(("データエディターを開きました", 'info'))
             except Exception as e:
                 messagebox.showerror("エラー", f"データエディターを開けませんでした: {str(e)}")
@@ -1291,14 +1291,6 @@ class RealtimeOCRGUI:
         else:
             # パイプラインプロセッサが無い場合は従来のFPS計算
             self.fps_var.set(f"{self.stats['fps']:.1f}")
-        
-        # データエディターが開いている場合、リアルタイムで同期
-        if self.data_editor_window and self.data_editor_window.window.winfo_exists():
-            try:
-                self.data_editor_window.refresh_table()
-            except Exception as e:
-                # エラーが発生した場合は無視（ウィンドウが閉じられた可能性）
-                pass
         
         self.root.after(1000, self._update_stats)
     

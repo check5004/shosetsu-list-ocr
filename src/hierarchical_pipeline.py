@@ -161,6 +161,9 @@ class HierarchicalPipeline:
                         hierarchical_result
                     )
                     
+                    # 画像カウンターに基づいてlist_item_idを更新（グローバルに一意）
+                    hierarchical_result.list_item_id = f"list_item_{self.session_manager.image_counter:03d}"
+                    
                     # b. OCR処理を実行
                     ocr_texts = self._process_ocr(
                         frame,

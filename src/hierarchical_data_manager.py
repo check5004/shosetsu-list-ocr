@@ -122,6 +122,8 @@ class HierarchicalDataManager:
         曖昧マッチングで重複チェックを実行し、新規データの場合のみ
         StructuredRecordを作成してリストに追加します。
         
+        タイトルが空の場合は追加されません（必須条件）。
+        
         Args:
             hierarchical_result: 階層的検出結果
             ocr_texts: OCRで抽出されたテキストの辞書
@@ -129,12 +131,17 @@ class HierarchicalDataManager:
             image_path: 切り出し画像の相対パス
         
         Returns:
-            新規データとして追加された場合True、重複でスキップされた場合False
+            新規データとして追加された場合True、重複またはタイトルなしでスキップされた場合False
         """
-        title = ocr_texts.get('title', '')
+        title = ocr_texts.get('title', '').strip()
+        
+        # タイトルが空の場合はスキップ（必須条件）
+        if not title:
+            print(f"⚠️  タイトルなしのためスキップ: {hierarchical_result.list_item_id}")
+            return False
         
         # 曖昧マッチングで重複チェック
-        if title and self._is_duplicate(title):
+        if self._is_duplicate(title):
             return False
         
         # StructuredRecordを作成
@@ -152,11 +159,10 @@ class HierarchicalDataManager:
         self.records.append(record)
         
         # タイトルリストに追加（次回の重複チェック用）
-        if title:
-            self.titles.append(title)
+        self.titles.append(title)
         
         # 新規データ検出メッセージを表示
-        print(f"✨ 新規データ検出: {title if title else '(タイトルなし)'}")
+        print(f"✨ 新規データ検出: {title}")
         
         return True
 
