@@ -46,15 +46,15 @@
   - `confirmed`と`confirmed_at`列を CSV 出力に含める
   - _Requirements: 6.10, 6.11_
 
-- [ ] 3. CSVImportExport クラスの実装
-- [ ] 3.1 CSVImportExport クラスの基本構造を作成
+- [x] 3. CSVImportExport クラスの実装
+- [x] 3.1 CSVImportExport クラスの基本構造を作成
 
   - `src/csv_import_export.py`を作成
   - `CSVImportExport`クラスを定義
   - 初期化メソッドを実装（data_manager への参照を保持）
   - _Requirements: 10.1_
 
-- [ ] 3.2 CSV エクスポート機能の実装
+- [x] 3.2 CSV エクスポート機能の実装
 
   - `export_to_csv()`メソッドを実装
   - pandas を使用して DataFrame を作成
@@ -62,7 +62,7 @@
   - ファイルパスが指定されない場合はデフォルトパスを使用
   - _Requirements: 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 3.3 CSV インポート機能の実装
+- [x] 3.3 CSV インポート機能の実装
 
   - `import_from_csv()`メソッドを実装
   - pandas を使用して CSV を読み込み
@@ -70,7 +70,7 @@
   - 既存データがある場合は上書き確認
   - _Requirements: 10.7, 10.8, 10.9, 10.12_
 
-- [ ] 3.4 CSV 形式検証機能の実装
+- [x] 3.4 CSV 形式検証機能の実装
 
   - `validate_csv_format()`メソッドを実装
   - 必須列の存在確認
