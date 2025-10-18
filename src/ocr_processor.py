@@ -42,13 +42,14 @@ class OCRProcessor:
                 f"macOSの場合: brew install tesseract tesseract-lang"
             )
 
-    def extract_text(self, frame: np.ndarray, bbox: DetectionResult) -> str:
+    def extract_text(self, frame: np.ndarray, bbox: DetectionResult, remove_newlines: bool = False) -> str:
         """
         バウンディングボックス領域からテキストを抽出
         
         Args:
             frame: 元画像（BGR形式のnumpy配列）
             bbox: バウンディングボックス情報
+            remove_newlines: 改行を削除するか（titleフィールド用）
         
         Returns:
             抽出されたテキスト（クリーンアップ済み）
@@ -88,7 +89,7 @@ class OCRProcessor:
             )
             
             # テキストをクリーンアップ
-            cleaned_text = self.cleanup_text(text)
+            cleaned_text = self.cleanup_text(text, remove_newlines=remove_newlines)
             
             return cleaned_text
             
@@ -98,7 +99,7 @@ class OCRProcessor:
             return ""
 
     @staticmethod
-    def cleanup_text(text: str) -> str:
+    def cleanup_text(text: str, remove_newlines: bool = False) -> str:
         """
         抽出されたテキストをクリーンアップ
         
@@ -106,6 +107,7 @@ class OCRProcessor:
         
         Args:
             text: 生のOCR結果
+            remove_newlines: 改行を削除するか（titleフィールド用）
         
         Returns:
             正規化されたテキスト（2文字以下の場合は空文字列）
@@ -113,29 +115,36 @@ class OCRProcessor:
         if not text:
             return ""
         
-        # 空白文字を正規化（複数の空白を1つに、改行を保持）
+        # 空白文字を正規化
         import re
         
-        # 各行ごとに処理
-        lines = text.split('\n')
-        cleaned_lines = []
-        
-        for line in lines:
-            # 行の前後の空白を削除
-            line = line.strip()
+        if remove_newlines:
+            # 改行を削除（titleフィールド用）
+            text = text.replace('\n', ' ').replace('\r', ' ')
             # 連続する空白を1つに
-            line = re.sub(r'\s+', ' ', line)
-            if line:
-                cleaned_lines.append(line)
-        
-        # 改行で結合
-        cleaned_text = '\n'.join(cleaned_lines)
+            text = re.sub(r'\s+', ' ', text)
+            text = text.strip()
+        else:
+            # 各行ごとに処理（改行を保持）
+            lines = text.split('\n')
+            cleaned_lines = []
+            
+            for line in lines:
+                # 行の前後の空白を削除
+                line = line.strip()
+                # 連続する空白を1つに
+                line = re.sub(r'\s+', ' ', line)
+                if line:
+                    cleaned_lines.append(line)
+            
+            # 改行で結合
+            text = '\n'.join(cleaned_lines)
         
         # 2文字以下のテキストをフィルタリング
-        if len(cleaned_text) <= 2:
+        if len(text) <= 2:
             return ""
         
-        return cleaned_text
+        return text
 
     @staticmethod
     def preprocess_image(image: np.ndarray) -> np.ndarray:

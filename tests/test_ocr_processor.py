@@ -148,6 +148,60 @@ class TestCleanupText:
         assert lines[0] == "行1"
         assert lines[1] == "行2"
         assert lines[2] == "行3"
+    
+    def test_cleanup_remove_newlines_for_title(self):
+        """titleフィールド用の改行削除を確認 (Requirement 2.1, 2.2)"""
+        # 改行を含むタイトル
+        text = "転生したら\nスライムだった件"
+        result = OCRProcessor.cleanup_text(text, remove_newlines=True)
+        
+        # 改行が削除され、スペースで置き換えられることを確認
+        assert result == "転生したら スライムだった件"
+        assert '\n' not in result
+    
+    def test_cleanup_remove_newlines_normalize_spaces(self):
+        """改行削除時の連続空白正規化を確認 (Requirement 2.2)"""
+        # 改行と複数の空白を含むテキスト
+        text = "転生したら\n\n  スライム   だった件"
+        result = OCRProcessor.cleanup_text(text, remove_newlines=True)
+        
+        # 改行が削除され、連続する空白が1つに正規化されることを確認
+        assert result == "転生したら スライム だった件"
+        assert '\n' not in result
+    
+    def test_cleanup_preserve_newlines_by_default(self):
+        """デフォルトでは改行が保持されることを確認 (Requirement 2.4)"""
+        # 改行を含むテキスト
+        text = "進捗: 50%\n最終読書日: 2024/01/01"
+        result = OCRProcessor.cleanup_text(text)
+        
+        # 改行が保持されることを確認
+        assert '\n' in result
+        assert "進捗: 50%" in result
+        assert "最終読書日: 2024/01/01" in result
+    
+    def test_cleanup_remove_newlines_with_carriage_return(self):
+        """改行削除時にキャリッジリターンも削除されることを確認 (Requirement 2.1)"""
+        # \r\nを含むテキスト
+        text = "転生したら\r\nスライムだった件"
+        result = OCRProcessor.cleanup_text(text, remove_newlines=True)
+        
+        # \rと\nの両方が削除されることを確認
+        assert result == "転生したら スライムだった件"
+        assert '\n' not in result
+        assert '\r' not in result
+    
+    def test_cleanup_remove_newlines_preserve_meaning(self):
+        """改行削除後もテキストの意味が保持されることを確認 (Requirement 2.3)"""
+        # 複数行のタイトル
+        text = "異世界転生\n物語\n第一章"
+        result = OCRProcessor.cleanup_text(text, remove_newlines=True)
+        
+        # すべての単語が保持され、スペースで区切られることを確認
+        assert "異世界転生" in result
+        assert "物語" in result
+        assert "第一章" in result
+        assert result == "異世界転生 物語 第一章"
 
 
 class TestPreprocessImage:
@@ -367,7 +421,54 @@ class TestExtractText:
         # pytesseractが正しいパラメータで呼ばれたことを確認
         call_kwargs = mock_image_to_string.call_args[1]
         assert call_kwargs['lang'] == 'jpn'
-        assert call_kwargs['config'] == '--psm 6'
+        assert call_kwargs['config'] == '--psm 6 --oem 3'
+    
+    @patch('src.ocr_processor.pytesseract.get_tesseract_version')
+    @patch('src.ocr_processor.pytesseract.image_to_string')
+    def test_extract_text_with_remove_newlines(self, mock_image_to_string, mock_get_version):
+        """titleフィールド用の改行削除が適用されることを確認 (Requirement 2.1, 2.4)"""
+        mock_get_version.return_value = "5.0.0"
+        # 改行を含むテキストを返す
+        mock_image_to_string.return_value = "転生したら\nスライムだった件"
+        
+        processor = OCRProcessor()
+        
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        bbox = DetectionResult(
+            x1=100, y1=100, x2=300, y2=200,
+            confidence=0.9, class_id=0, class_name="list-item"
+        )
+        
+        # remove_newlines=Trueで呼び出し
+        result = processor.extract_text(frame, bbox, remove_newlines=True)
+        
+        # 改行が削除されていることを確認
+        assert result == "転生したら スライムだった件"
+        assert '\n' not in result
+    
+    @patch('src.ocr_processor.pytesseract.get_tesseract_version')
+    @patch('src.ocr_processor.pytesseract.image_to_string')
+    def test_extract_text_without_remove_newlines(self, mock_image_to_string, mock_get_version):
+        """デフォルトでは改行が保持されることを確認 (Requirement 2.4)"""
+        mock_get_version.return_value = "5.0.0"
+        # 改行を含むテキストを返す
+        mock_image_to_string.return_value = "進捗: 50%\n最終読書日: 2024/01/01"
+        
+        processor = OCRProcessor()
+        
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        bbox = DetectionResult(
+            x1=100, y1=100, x2=300, y2=200,
+            confidence=0.9, class_id=0, class_name="list-item"
+        )
+        
+        # デフォルト（remove_newlines=False）で呼び出し
+        result = processor.extract_text(frame, bbox)
+        
+        # 改行が保持されていることを確認
+        assert '\n' in result
+        assert "進捗: 50%" in result
+        assert "最終読書日: 2024/01/01" in result
 
 
 class TestOCRProcessorIntegration:

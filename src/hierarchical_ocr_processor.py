@@ -51,8 +51,9 @@ def process_hierarchical_detection(
     for element_name, detection_result in child_elements:
         if detection_result is not None:
             try:
-                # OCR処理を実行
-                text = ocr_processor.extract_text(frame, detection_result)
+                # OCR処理を実行（titleフィールドのみ改行を削除）
+                remove_newlines = (element_name == 'title')
+                text = ocr_processor.extract_text(frame, detection_result, remove_newlines=remove_newlines)
                 ocr_texts[element_name] = text
                 
                 # デバッグ情報（空でない場合のみ）
