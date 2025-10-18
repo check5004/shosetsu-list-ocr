@@ -132,15 +132,15 @@
   - 確定済み、エラー、未確認、通常のレコードを色分け
   - _Requirements: 6.8, 11.1_
 
-- [ ] 5. DuplicateDetectionModal クラスの実装
-- [ ] 5.1 DuplicateDetectionModal クラスの基本構造を作成
+- [x] 5. DuplicateDetectionModal クラスの実装
+- [x] 5.1 DuplicateDetectionModal クラスの基本構造を作成
 
   - `src/duplicate_detection_modal.py`を作成
   - `DuplicateDetectionModal`クラスを定義
   - 初期化メソッドを実装
   - _Requirements: 6.4_
 
-- [ ] 5.2 モーダル UI の構築
+- [x] 5.2 モーダル UI の構築
 
   - `setup_ui()`メソッドを実装
   - 確定レコード編集エリアを作成（タイトル、進捗、日付、サイト）
@@ -148,7 +148,7 @@
   - 確定・キャンセルボタンを配置
   - _Requirements: 6.5, 6.6, 6.7_
 
-- [ ] 5.3 確定処理の実装
+- [x] 5.3 確定処理の実装
 
   - `on_confirm()`メソッドを実装
   - 確定レコードの編集内容を保存
@@ -156,7 +156,7 @@
   - 確定レコードをロック
   - _Requirements: 6.2, 6.6, 6.7_
 
-- [ ] 5.4 モーダル表示とイベント処理
+- [x] 5.4 モーダル表示とイベント処理
 
   - `show()`メソッドを実装
   - モーダルダイアログとして表示
